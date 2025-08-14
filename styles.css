@@ -93,7 +93,7 @@ body {
     gap: 10px;
 }
 
-.private-btn, .help-btn {
+.help-btn {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
@@ -104,7 +104,7 @@ body {
     transition: all 0.2s;
 }
 
-.private-btn:hover, .help-btn:hover {
+.help-btn:hover {
     background: rgba(255, 255, 255, 0.2);
 }
 
