@@ -3,6 +3,10 @@ class WinDesk {
     constructor() {
         this.currentDesktopId = 'default';
         this.desktops = {};
+        this.selectedIcons = new Set();
+        this.isSelecting = false;
+        this.selectionStart = null;
+        this.isBatchDragging = false;
         this.init();
     }
 
@@ -185,6 +189,180 @@ class WinDesk {
 
         document.getElementById('confirmEdit').addEventListener('click', () => {
             this.updateWebsite();
+        });
+
+        // 多選功能事件
+        this.setupMultiSelectEvents();
+    }
+
+    // 多選功能設置
+    setupMultiSelectEvents() {
+        const desktopContent = document.getElementById('desktopContent');
+        
+        desktopContent.addEventListener('mousedown', (e) => {
+            // 只處理左鍵點擊，且不是在圖示上
+            if (e.button !== 0 || e.target.closest('.website-icon')) return;
+            
+            this.startSelection(e);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (this.isSelecting) {
+                this.updateSelection(e);
+            }
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (this.isSelecting) {
+                this.endSelection(e);
+            }
+        });
+
+        // 鍵盤事件
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.clearSelection();
+            }
+        });
+    }
+
+    // 選取功能
+    startSelection(e) {
+        this.clearSelection();
+        this.isSelecting = true;
+        
+        const desktopArea = document.getElementById('desktopArea');
+        const rect = desktopArea.getBoundingClientRect();
+        
+        this.selectionStart = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+        
+        const selectionBox = document.getElementById('selectionBox');
+        selectionBox.style.display = 'block';
+        selectionBox.style.left = this.selectionStart.x + 'px';
+        selectionBox.style.top = this.selectionStart.y + 'px';
+        selectionBox.style.width = '0px';
+        selectionBox.style.height = '0px';
+        
+        e.preventDefault();
+    }
+
+    updateSelection(e) {
+        if (!this.isSelecting || !this.selectionStart) return;
+        
+        const desktopArea = document.getElementById('desktopArea');
+        const rect = desktopArea.getBoundingClientRect();
+        
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        
+        const left = Math.min(this.selectionStart.x, currentX);
+        const top = Math.min(this.selectionStart.y, currentY);
+        const width = Math.abs(currentX - this.selectionStart.x);
+        const height = Math.abs(currentY - this.selectionStart.y);
+        
+        const selectionBox = document.getElementById('selectionBox');
+        selectionBox.style.left = left + 'px';
+        selectionBox.style.top = top + 'px';
+        selectionBox.style.width = width + 'px';
+        selectionBox.style.height = height + 'px';
+        
+        // 檢查哪些圖示在選取範圍內
+        this.updateSelectedIcons(left, top, width, height);
+    }
+
+    updateSelectedIcons(left, top, width, height) {
+        const icons = document.querySelectorAll('.website-icon');
+        const selectionRect = { left, top, right: left + width, bottom: top + height };
+        
+        this.selectedIcons.clear();
+        
+        icons.forEach(icon => {
+            const iconRect = icon.getBoundingClientRect();
+            const desktopArea = document.getElementById('desktopArea');
+            const desktopRect = desktopArea.getBoundingClientRect();
+            
+            const iconRelativeRect = {
+                left: iconRect.left - desktopRect.left,
+                top: iconRect.top - desktopRect.top,
+                right: iconRect.right - desktopRect.left,
+                bottom: iconRect.bottom - desktopRect.top
+            };
+            
+            // 檢查是否相交
+            const intersects = !(
+                iconRelativeRect.right < selectionRect.left ||
+                iconRelativeRect.left > selectionRect.right ||
+                iconRelativeRect.bottom < selectionRect.top ||
+                iconRelativeRect.top > selectionRect.bottom
+            );
+            
+            if (intersects) {
+                const websiteId = icon.dataset.websiteId;
+                this.selectedIcons.add(websiteId);
+                icon.classList.add('selected');
+            } else {
+                icon.classList.remove('selected');
+            }
+        });
+    }
+
+    endSelection(e) {
+        this.isSelecting = false;
+        
+        const selectionBox = document.getElementById('selectionBox');
+        selectionBox.style.display = 'none';
+        
+        // 如果有選中的圖示，設置批量拖拽
+        if (this.selectedIcons.size > 0) {
+            this.setupBatchDrag();
+        }
+    }
+
+    clearSelection() {
+        this.selectedIcons.clear();
+        const icons = document.querySelectorAll('.website-icon');
+        icons.forEach(icon => {
+            icon.classList.remove('selected', 'batch-dragging');
+        });
+        
+        const selectionBox = document.getElementById('selectionBox');
+        selectionBox.style.display = 'none';
+        this.isBatchDragging = false;
+    }
+
+    setupBatchDrag() {
+        const selectedIcons = document.querySelectorAll('.website-icon.selected');
+        
+        selectedIcons.forEach(icon => {
+            // 暫時移除原有的拖拽事件，添加批量拖拽
+            icon.addEventListener('dragstart', (e) => {
+                if (this.selectedIcons.has(icon.dataset.websiteId)) {
+                    this.isBatchDragging = true;
+                    e.dataTransfer.setData('text/plain', 'batch:' + Array.from(this.selectedIcons).join(','));
+                    
+                    // 為所有選中的圖示添加拖拽樣式
+                    this.selectedIcons.forEach(websiteId => {
+                        const selectedIcon = document.querySelector(`[data-website-id="${websiteId}"]`);
+                        if (selectedIcon) {
+                            selectedIcon.classList.add('batch-dragging');
+                        }
+                    });
+                }
+            });
+
+            icon.addEventListener('dragend', (e) => {
+                // 移除拖拽樣式
+                this.selectedIcons.forEach(websiteId => {
+                    const selectedIcon = document.querySelector(`[data-website-id="${websiteId}"]`);
+                    if (selectedIcon) {
+                        selectedIcon.classList.remove('batch-dragging');
+                    }
+                });
+                this.isBatchDragging = false;
+            });
         });
     }
 
@@ -455,6 +633,9 @@ class WinDesk {
         // 設置放置區域事件
         this.setupDropEvents();
         this.updateBackground();
+        
+        // 清除任何現有的選取狀態
+        this.clearSelection();
     }
 
     // 拖曳功能
@@ -519,13 +700,21 @@ class WinDesk {
                 e.preventDefault();
                 cell.classList.remove('drag-over');
                 
-                const websiteId = e.dataTransfer.getData('text/plain');
+                const transferData = e.dataTransfer.getData('text/plain');
                 const newGridIndex = parseInt(cell.dataset.gridIndex);
                 
-                console.log('Drop on grid:', newGridIndex, 'website:', websiteId);
+                console.log('Drop on grid:', newGridIndex, 'data:', transferData);
                 
-                if (websiteId && !isNaN(newGridIndex)) {
-                    this.moveWebsiteToGrid(websiteId, newGridIndex);
+                if (transferData && !isNaN(newGridIndex)) {
+                    if (transferData.startsWith('batch:')) {
+                        // 批量移動
+                        const websiteIds = transferData.replace('batch:', '').split(',');
+                        this.moveBatchToGrid(websiteIds, newGridIndex);
+                        this.clearSelection();
+                    } else {
+                        // 單個移動
+                        this.moveWebsiteToGrid(transferData, newGridIndex);
+                    }
                 }
             });
         });
@@ -564,12 +753,148 @@ class WinDesk {
         this.renderCurrentDesktop();
     }
 
+    moveBatchToGrid(websiteIds, dropGridIndex) {
+        console.log('Moving batch:', websiteIds, 'to grid:', dropGridIndex);
+        
+        const currentDesktop = this.desktops[this.currentDesktopId];
+        const websites = websiteIds.map(id => 
+            currentDesktop.websites.find(w => w.id === id)
+        ).filter(Boolean);
+        
+        if (websites.length === 0) return;
+
+        // 計算所有選中圖示的相對位置（以最小位置為基準）
+        const positions = websites.map(w => w.gridPosition || 0);
+        const minPosition = Math.min(...positions);
+        
+        // 計算相對偏移量
+        const relativeOffsets = websites.map(website => {
+            const currentPos = website.gridPosition || 0;
+            const row = Math.floor(currentPos / 20);
+            const col = currentPos % 20;
+            const minRow = Math.floor(minPosition / 20);
+            const minCol = minPosition % 20;
+            
+            return {
+                website: website,
+                rowOffset: row - minRow,
+                colOffset: col - minCol,
+                originalPosition: currentPos
+            };
+        });
+
+        // 計算新的基準位置
+        const newBaseRow = Math.floor(dropGridIndex / 20);
+        const newBaseCol = dropGridIndex % 20;
+
+        // 暫時記錄需要移動的圖示的原始位置
+        const originalPositions = new Map();
+        websites.forEach(website => {
+            originalPositions.set(website.id, website.gridPosition);
+        });
+
+        // 計算新位置並處理位置衝突
+        const newPositions = new Map();
+        const conflictedWebsites = [];
+
+        relativeOffsets.forEach(({ website, rowOffset, colOffset }) => {
+            const newRow = newBaseRow + rowOffset;
+            const newCol = newBaseCol + colOffset;
+            const newPosition = newRow * 20 + newCol;
+
+            // 檢查新位置是否在邊界內
+            if (newRow >= 0 && newRow < 9 && newCol >= 0 && newCol < 20) {
+                // 檢查目標位置是否被其他圖示佔用（不包括正在移動的圖示）
+                const existingWebsite = currentDesktop.websites.find(w => 
+                    w.gridPosition === newPosition && !websiteIds.includes(w.id)
+                );
+                
+                if (existingWebsite) {
+                    conflictedWebsites.push(existingWebsite);
+                }
+                
+                newPositions.set(website.id, newPosition);
+            } else {
+                // 如果超出邊界，保持原位置
+                newPositions.set(website.id, website.gridPosition);
+            }
+        });
+
+        // 將被衝突的圖示移動到空位
+        const reservedPositions = new Set(Array.from(newPositions.values()));
+        conflictedWebsites.forEach(website => {
+            const emptyPosition = this.findNextAvailableGridExcluding(reservedPositions);
+            website.gridPosition = emptyPosition;
+            reservedPositions.add(emptyPosition);
+        });
+
+        // 應用新位置
+        websites.forEach(website => {
+            const newPosition = newPositions.get(website.id);
+            if (newPosition !== undefined) {
+                website.gridPosition = newPosition;
+            }
+        });
+        
+        this.saveData();
+        this.renderCurrentDesktop();
+    }
+
+    findAvailablePositions(count, startIndex) {
+        const currentDesktop = this.desktops[this.currentDesktopId];
+        const usedPositions = new Set(currentDesktop.websites.map(w => w.gridPosition || 0));
+        const positions = [];
+        
+        // 嘗試從起始位置開始找連續位置
+        let currentIndex = startIndex;
+        let found = 0;
+        
+        while (found < count && currentIndex < 180) {
+            if (!usedPositions.has(currentIndex)) {
+                positions.push(currentIndex);
+                found++;
+            } else {
+                // 如果遇到已佔用的位置，重新開始尋找
+                positions.length = 0;
+                found = 0;
+            }
+            currentIndex++;
+        }
+        
+        // 如果找不到足夠的連續位置，就分散放置
+        if (positions.length < count) {
+            positions.length = 0;
+            for (let i = 0; i < 180 && positions.length < count; i++) {
+                if (!usedPositions.has(i)) {
+                    positions.push(i);
+                }
+            }
+        }
+        
+        return positions;
+    }
+
     findNextAvailableGrid() {
         const currentDesktop = this.desktops[this.currentDesktopId];
         const usedPositions = currentDesktop.websites.map(w => w.gridPosition || 0);
         
         for (let i = 0; i < 180; i++) {
             if (!usedPositions.includes(i)) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    findNextAvailableGridExcluding(excludePositions) {
+        const currentDesktop = this.desktops[this.currentDesktopId];
+        const usedPositions = new Set(currentDesktop.websites.map(w => w.gridPosition || 0));
+        
+        // 合併已使用位置和需要排除的位置
+        const allExcluded = new Set([...usedPositions, ...excludePositions]);
+        
+        for (let i = 0; i < 180; i++) {
+            if (!allExcluded.has(i)) {
                 return i;
             }
         }
