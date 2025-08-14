@@ -282,7 +282,8 @@ class WinDesk {
             id: 'website_' + Date.now(),
             name: name,
             url: url.startsWith('http') ? url : 'https://' + url,
-            icon: icon || `https://www.google.com/s2/favicons?domain=${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}&sz=48`
+            icon: icon || `https://www.google.com/s2/favicons?domain=${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}&sz=48`,
+            gridPosition: this.findNextAvailableGrid()
         };
 
         this.desktops[this.currentDesktopId].websites.push(website);
@@ -317,22 +318,178 @@ class WinDesk {
             return;
         }
 
+        // 建立12x8的網格
         desktopContent.innerHTML = '';
+        
+        // 創建96個網格單元格 (12 columns x 8 rows)
+        for (let i = 0; i < 96; i++) {
+            const gridCell = document.createElement('div');
+            gridCell.className = 'grid-cell';
+            gridCell.dataset.gridIndex = i;
+            desktopContent.appendChild(gridCell);
+        }
 
+        // 放置網站圖示到對應位置
         currentDesktop.websites.forEach(website => {
-            const websiteElement = document.createElement('a');
-            websiteElement.className = 'website-icon';
-            websiteElement.href = website.url;
-            websiteElement.target = '_blank';
-            websiteElement.innerHTML = `
-                <img src="${website.icon}" alt="${website.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 6v6l4 2%22/></svg>'">
-                <div class="name">${website.name}</div>
-                <button class="delete-btn" onclick="event.preventDefault(); event.stopPropagation(); windesk.deleteWebsite('${website.id}')" title="刪除">×</button>
-            `;
-            desktopContent.appendChild(websiteElement);
+            const gridIndex = website.gridPosition || 0;
+            const gridCell = desktopContent.querySelector(`[data-grid-index="${gridIndex}"]`);
+            
+            if (gridCell && !gridCell.querySelector('.website-icon')) {
+                const websiteElement = document.createElement('div');
+                websiteElement.className = 'website-icon';
+                websiteElement.draggable = true;
+                websiteElement.dataset.websiteId = website.id;
+                websiteElement.dataset.websiteUrl = website.url;
+                websiteElement.innerHTML = `
+                    <img src="${website.icon}" alt="${website.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 6v6l4 2%22/></svg>'">
+                    <div class="name">${website.name}</div>
+                    <button class="delete-btn" title="刪除">×</button>
+                `;
+                
+                // 添加點擊打開網站事件
+                websiteElement.addEventListener('click', (e) => {
+                    if (!e.target.closest('.delete-btn') && !websiteElement.classList.contains('dragging')) {
+                        window.open(website.url, '_blank');
+                    }
+                });
+                
+                // 添加刪除按鈕事件
+                const deleteBtn = websiteElement.querySelector('.delete-btn');
+                deleteBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.deleteWebsite(website.id);
+                });
+                
+                // 添加拖曳事件
+                this.setupDragEvents(websiteElement);
+                
+                gridCell.appendChild(websiteElement);
+            }
         });
 
+        // 設置放置區域事件
+        this.setupDropEvents();
         this.updateBackground();
+    }
+
+    // 拖曳功能
+    setupDragEvents(websiteElement) {
+        let isDragging = false;
+        
+        websiteElement.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.delete-btn')) return;
+            isDragging = false;
+        });
+        
+        websiteElement.addEventListener('dragstart', (e) => {
+            isDragging = true;
+            console.log('Drag start:', websiteElement.dataset.websiteId);
+            e.dataTransfer.setData('text/plain', websiteElement.dataset.websiteId);
+            e.dataTransfer.effectAllowed = 'move';
+            websiteElement.classList.add('dragging');
+        });
+
+        websiteElement.addEventListener('dragend', (e) => {
+            console.log('Drag end');
+            websiteElement.classList.remove('dragging');
+            setTimeout(() => {
+                isDragging = false;
+            }, 100);
+        });
+        
+        // 防止拖曳時觸發點擊事件
+        websiteElement.addEventListener('click', (e) => {
+            if (isDragging) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        });
+    }
+
+    setupDropEvents() {
+        const gridCells = document.querySelectorAll('.grid-cell');
+        
+        gridCells.forEach(cell => {
+            // 清除之前的事件監聽器
+            cell.removeEventListener('dragover', this.handleDragOver);
+            cell.removeEventListener('dragleave', this.handleDragLeave);
+            cell.removeEventListener('drop', this.handleDrop);
+            
+            cell.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                cell.classList.add('drag-over');
+                console.log('Drag over grid:', cell.dataset.gridIndex);
+            });
+
+            cell.addEventListener('dragleave', (e) => {
+                // 只有當離開的是cell本身而不是子元素時才移除樣式
+                if (!cell.contains(e.relatedTarget)) {
+                    cell.classList.remove('drag-over');
+                }
+            });
+
+            cell.addEventListener('drop', (e) => {
+                e.preventDefault();
+                cell.classList.remove('drag-over');
+                
+                const websiteId = e.dataTransfer.getData('text/plain');
+                const newGridIndex = parseInt(cell.dataset.gridIndex);
+                
+                console.log('Drop on grid:', newGridIndex, 'website:', websiteId);
+                
+                if (websiteId && !isNaN(newGridIndex)) {
+                    this.moveWebsiteToGrid(websiteId, newGridIndex);
+                }
+            });
+        });
+    }
+
+    moveWebsiteToGrid(websiteId, newGridIndex) {
+        console.log('Moving website:', websiteId, 'to grid:', newGridIndex);
+        
+        const currentDesktop = this.desktops[this.currentDesktopId];
+        const website = currentDesktop.websites.find(w => w.id === websiteId);
+        
+        if (!website) {
+            console.error('Website not found:', websiteId);
+            return;
+        }
+
+        // 檢查目標位置是否已被佔用
+        const existingWebsite = currentDesktop.websites.find(w => 
+            w.gridPosition === newGridIndex && w.id !== websiteId
+        );
+        
+        if (existingWebsite) {
+            // 交換位置
+            const oldGridIndex = website.gridPosition || 0;
+            existingWebsite.gridPosition = oldGridIndex;
+            console.log('Swapping positions with website:', existingWebsite.id);
+        }
+
+        // 更新位置
+        const oldPosition = website.gridPosition;
+        website.gridPosition = newGridIndex;
+        
+        console.log('Updated position from', oldPosition, 'to', newGridIndex);
+        
+        this.saveData();
+        this.renderCurrentDesktop();
+    }
+
+    findNextAvailableGrid() {
+        const currentDesktop = this.desktops[this.currentDesktopId];
+        const usedPositions = currentDesktop.websites.map(w => w.gridPosition || 0);
+        
+        for (let i = 0; i < 96; i++) {
+            if (!usedPositions.includes(i)) {
+                return i;
+            }
+        }
+        return 0;
     }
 
     // 背景管理

@@ -254,6 +254,22 @@ body {
     box-sizing: border-box;
 }
 
+/* 網格單元格 */
+.grid-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    min-height: 70px;
+    position: relative;
+}
+
+.grid-cell.drag-over {
+    background: rgba(103, 126, 234, 0.3);
+    border: 2px dashed rgba(103, 126, 234, 0.8);
+}
+
 /* 網站圖示 */
 .website-icon {
     display: flex;
@@ -265,7 +281,7 @@ body {
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    cursor: pointer;
+    cursor: grab;
     transition: all 0.3s ease;
     text-decoration: none;
     color: white;
@@ -276,7 +292,17 @@ body {
     max-height: 90px;
 }
 
-.website-icon:hover {
+.website-icon:active {
+    cursor: grabbing;
+}
+
+.website-icon.dragging {
+    opacity: 0.5;
+    transform: scale(0.9);
+    z-index: 1000;
+}
+
+.website-icon:hover:not(.dragging) {
     transform: translateY(-5px);
     background: rgba(255, 255, 255, 0.2);
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
