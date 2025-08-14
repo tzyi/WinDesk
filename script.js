@@ -268,6 +268,52 @@ class WinDesk {
     }
 
     // 網站管理
+    getFaviconUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            const domain = urlObj.hostname;
+            
+            // 返回Google的favicon服務作為主要來源
+            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+        } catch (error) {
+            console.warn('Failed to parse URL for favicon:', url, error);
+            // 如果URL解析失敗，使用預設圖示
+            return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
+        }
+    }
+
+    setupFaviconFallback(imgElement, websiteUrl) {
+        try {
+            const urlObj = new URL(websiteUrl);
+            const domain = urlObj.hostname;
+            
+            // 定義多個favicon來源的優先級列表
+            const faviconSources = [
+                `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
+                `${urlObj.protocol}//${domain}/favicon.ico`,
+                `${urlObj.protocol}//${domain}/favicon.png`,
+                `${urlObj.protocol}//${domain}/apple-touch-icon.png`,
+                // 最後的預設圖示
+                'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>'
+            ];
+            
+            let currentSourceIndex = 0;
+            
+            const tryNextSource = () => {
+                if (currentSourceIndex < faviconSources.length - 1) {
+                    currentSourceIndex++;
+                    imgElement.src = faviconSources[currentSourceIndex];
+                }
+            };
+            
+            imgElement.addEventListener('error', tryNextSource);
+            
+        } catch (error) {
+            console.warn('Failed to setup favicon fallback:', error);
+            imgElement.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
+        }
+    }
+
     addWebsite() {
         const name = document.getElementById('websiteName').value.trim();
         const url = document.getElementById('websiteUrl').value.trim();
@@ -278,11 +324,12 @@ class WinDesk {
             return;
         }
 
+        const finalUrl = url.startsWith('http') ? url : 'https://' + url;
         const website = {
             id: 'website_' + Date.now(),
             name: name,
-            url: url.startsWith('http') ? url : 'https://' + url,
-            icon: icon || `https://www.google.com/s2/favicons?domain=${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}&sz=48`,
+            url: finalUrl,
+            icon: icon || this.getFaviconUrl(finalUrl),
             gridPosition: this.findNextAvailableGrid()
         };
 
@@ -340,11 +387,20 @@ class WinDesk {
                 websiteElement.draggable = true;
                 websiteElement.dataset.websiteId = website.id;
                 websiteElement.dataset.websiteUrl = website.url;
+                const imgElement = document.createElement('img');
+                imgElement.src = website.icon;
+                imgElement.alt = website.name;
+                
+                // 為圖片添加錯誤處理，嘗試多個favicon來源
+                this.setupFaviconFallback(imgElement, website.url);
+                
                 websiteElement.innerHTML = `
-                    <img src="${website.icon}" alt="${website.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 6v6l4 2%22/></svg>'">
                     <div class="name">${website.name}</div>
                     <button class="delete-btn" title="刪除">×</button>
                 `;
+                
+                // 將圖片插入到第一個位置
+                websiteElement.insertBefore(imgElement, websiteElement.firstChild);
                 
                 // 添加點擊打開網站事件
                 websiteElement.addEventListener('click', (e) => {
