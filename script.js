@@ -318,11 +318,11 @@ class WinDesk {
             return;
         }
 
-        // 建立12x8的網格
+        // 建立20x9的網格
         desktopContent.innerHTML = '';
         
-        // 創建96個網格單元格 (12 columns x 8 rows)
-        for (let i = 0; i < 96; i++) {
+        // 創建180個網格單元格 (20 columns x 9 rows)
+        for (let i = 0; i < 180; i++) {
             const gridCell = document.createElement('div');
             gridCell.className = 'grid-cell';
             gridCell.dataset.gridIndex = i;
@@ -484,7 +484,7 @@ class WinDesk {
         const currentDesktop = this.desktops[this.currentDesktopId];
         const usedPositions = currentDesktop.websites.map(w => w.gridPosition || 0);
         
-        for (let i = 0; i < 96; i++) {
+        for (let i = 0; i < 180; i++) {
             if (!usedPositions.includes(i)) {
                 return i;
             }
