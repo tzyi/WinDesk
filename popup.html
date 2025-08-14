@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WinDesk Settings</title>
+    <style>
+        body {
+            width: 300px;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+        }
+        
+        h2 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            text-align: center;
+        }
+        
+        .setting-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .setting-label {
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: block;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .version {
+            text-align: center;
+            font-size: 11px;
+            margin-top: 15px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <h2>🏠 WinDesk 設定</h2>
+    
+    <div class="setting-item">
+        <span class="setting-label">快速操作</span>
+        <button class="btn" onclick="openNewTab()">開啟新分頁</button>
+    </div>
+    
+    <div class="setting-item">
+        <span class="setting-label">資料管理</span>
+        <button class="btn" onclick="exportData()">匯出設定</button>
+    </div>
+    
+    <div class="setting-item">
+        <span class="setting-label">說明</span>
+        <button class="btn" onclick="showHelp()">使用說明</button>
+    </div>
+    
+    <div class="version">
+        WinDesk v1.0.0
+    </div>
+    
+    <script>
+        function openNewTab() {
+            chrome.tabs.create({ url: 'chrome://newtab/' });
+            window.close();
+        }
+        
+        function exportData() {
+            chrome.tabs.create({ url: 'chrome://newtab/' });
+            window.close();
+        }
+        
+        function showHelp() {
+            alert('WinDesk 使用說明：\n\n1. 在左側邊欄管理多個桌面\n2. 右鍵點擊右側區域新增網站\n3. 使用匯入/匯出功能備份設定');
+        }
+    </script>
+</body>
+</html>

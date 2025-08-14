@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WinDesk - 新分頁</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- 頂部搜索欄 -->
+    <div class="top-bar">
+        <div class="search-container">
+            <button class="menu-btn">☰</button>
+            <div class="logo">🏠 Demo Websktop</div>
+            <div class="search-box">
+                <input type="text" placeholder="Search..." class="search-input">
+                <button class="search-btn">🔍</button>
+            </div>
+            <div class="user-info">
+                <button class="private-btn">🔒 Private</button>
+                <button class="help-btn">?</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- 左側邊欄 - 桌面管理 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h3>桌面管理</h3>
+                <button class="add-desktop-btn" title="新增桌面">+</button>
+            </div>
+            
+            <div class="desktop-list" id="desktopList">
+                <!-- 桌面列表將在這裡動態生成 -->
+            </div>
+            
+            <!-- 匯入/匯出按鈕 -->
+            <div class="sidebar-footer">
+                <button class="import-btn" id="importBtn">📁 匯入設定</button>
+                <button class="export-btn" id="exportBtn">💾 匯出設定</button>
+            </div>
+        </div>
+
+        <!-- 右側主要區域 - 桌面 -->
+        <div class="desktop-area" id="desktopArea">
+            <div class="desktop-content" id="desktopContent">
+                <!-- 網站圖示將在這裡動態生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 右鍵選單 -->
+    <div class="context-menu" id="contextMenu">
+        <div class="menu-item" id="addWebsiteBtn">
+            <span class="menu-icon">🔗</span>
+            <span>新增常用網址</span>
+        </div>
+        <div class="menu-item" id="changeBackgroundBtn">
+            <span class="menu-icon">🖼️</span>
+            <span>更換背景</span>
+        </div>
+    </div>
+
+    <!-- 新增網址對話框 -->
+    <div class="modal" id="addWebsiteModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>新增常用網址</h3>
+                <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="websiteName">網站名稱：</label>
+                    <input type="text" id="websiteName" placeholder="例如：Google">
+                </div>
+                <div class="form-group">
+                    <label for="websiteUrl">網址：</label>
+                    <input type="url" id="websiteUrl" placeholder="例如：https://google.com">
+                </div>
+                <div class="form-group">
+                    <label for="websiteIcon">圖示網址：</label>
+                    <input type="url" id="websiteIcon" placeholder="例如：https://google.com/favicon.ico">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelAdd">取消</button>
+                <button class="btn-primary" id="confirmAdd">確認新增</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 更換背景對話框 -->
+    <div class="modal" id="changeBackgroundModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>更換背景</h3>
+                <button class="modal-close" id="closeBackgroundModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="backgroundUrl">背景圖片網址：</label>
+                    <input type="url" id="backgroundUrl" placeholder="例如：https://example.com/background.jpg">
+                </div>
+                <div class="form-group">
+                    <label>或選擇本地圖片：</label>
+                    <input type="file" id="backgroundFile" accept="image/*">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelBackground">取消</button>
+                <button class="btn-primary" id="confirmBackground">確認更換</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 桌面重命名對話框 -->
+    <div class="modal" id="renameDesktopModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>重命名桌面</h3>
+                <button class="modal-close" id="closeRenameModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="desktopName">桌面名稱：</label>
+                    <input type="text" id="desktopName" placeholder="輸入桌面名稱">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelRename">取消</button>
+                <button class="btn-primary" id="confirmRename">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 隱藏的文件輸入用於匯入 -->
+    <input type="file" id="importFile" accept=".json" style="display: none;">
+
+    <script src="script.js"></script>
+</body>
+</html>

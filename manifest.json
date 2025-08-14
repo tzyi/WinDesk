@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "WinDesk - Desktop New Tab",
+  "version": "1.0.0",
+  "description": "Chrome擴充軟體：讓你瀏覽器初始化畫面像Window桌面般，可將常用網頁放於桌面",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "WinDesk Settings"
+  }
+}
