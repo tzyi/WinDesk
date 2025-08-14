@@ -1,10 +1,16 @@
 # WinDesk - Windows桌面風格新分頁
 
-一個功能豐富的Chrome擴充軟體，讓你的瀏覽器新分頁變成類似Windows桌面的界面，可以自由管理和排列常用網站。
-
 ![WinDesk](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![Chrome Extension](https://img.shields.io/badge/platform-Chrome-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-orange.svg)
+
+一個功能豐富的Chrome擴充軟體，讓你的瀏覽器新分頁變成類似Windows桌面的界面，可以自由管理和排列常用網站。
+
+![](img/top.png)
+![](img/icon.png)
+![](img/bg.png)
+
+
 
 ## ✨ 主要功能
 
