@@ -75,6 +75,7 @@ class WinDesk {
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.context-menu')) {
                 this.hideContextMenu();
+                this.hideIconContextMenu();
             }
         });
 
@@ -160,6 +161,30 @@ class WinDesk {
 
         document.getElementById('importFile').addEventListener('change', (e) => {
             this.handleImportFile(e);
+        });
+
+        // 圖示右鍵選單事件
+        document.getElementById('editWebsiteBtn').addEventListener('click', () => {
+            this.editCurrentWebsite();
+            this.hideIconContextMenu();
+        });
+
+        document.getElementById('deleteWebsiteBtn').addEventListener('click', () => {
+            this.deleteCurrentWebsite();
+            this.hideIconContextMenu();
+        });
+
+        // 編輯網站模態事件
+        document.getElementById('closeEditModal').addEventListener('click', () => {
+            this.hideModal('editWebsiteModal');
+        });
+
+        document.getElementById('cancelEdit').addEventListener('click', () => {
+            this.hideModal('editWebsiteModal');
+        });
+
+        document.getElementById('confirmEdit').addEventListener('click', () => {
+            this.updateWebsite();
         });
     }
 
@@ -420,6 +445,9 @@ class WinDesk {
                 // 添加拖曳事件
                 this.setupDragEvents(websiteElement);
                 
+                // 添加右鍵選單事件
+                this.setupIconContextMenu(websiteElement, website);
+                
                 gridCell.appendChild(websiteElement);
             }
         });
@@ -603,6 +631,27 @@ class WinDesk {
         document.getElementById('contextMenu').style.display = 'none';
     }
 
+    // 圖示右鍵選單
+    setupIconContextMenu(websiteElement, website) {
+        websiteElement.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            this.currentEditingWebsite = website;
+            this.hideContextMenu();
+            this.showIconContextMenu(e.pageX, e.pageY);
+        });
+    }
+
+    showIconContextMenu(x, y) {
+        const iconContextMenu = document.getElementById('iconContextMenu');
+        iconContextMenu.style.display = 'block';
+        iconContextMenu.style.left = Math.min(x, window.innerWidth - iconContextMenu.offsetWidth) + 'px';
+        iconContextMenu.style.top = Math.min(y, window.innerHeight - iconContextMenu.offsetHeight) + 'px';
+    }
+
+    hideIconContextMenu() {
+        document.getElementById('iconContextMenu').style.display = 'none';
+    }
+
     // 模態對話框
     showModal(modalId) {
         document.getElementById(modalId).classList.add('show');
@@ -618,6 +667,55 @@ class WinDesk {
 
     showChangeBackgroundModal() {
         this.showModal('changeBackgroundModal');
+    }
+
+    // 編輯網站功能
+    editCurrentWebsite() {
+        if (!this.currentEditingWebsite) return;
+        
+        const website = this.currentEditingWebsite;
+        document.getElementById('editWebsiteName').value = website.name;
+        document.getElementById('editWebsiteUrl').value = website.url;
+        document.getElementById('editWebsiteIcon').value = website.icon.startsWith('data:') ? '' : website.icon;
+        
+        this.showModal('editWebsiteModal');
+    }
+
+    deleteCurrentWebsite() {
+        if (!this.currentEditingWebsite) return;
+        this.deleteWebsite(this.currentEditingWebsite.id);
+    }
+
+    updateWebsite() {
+        if (!this.currentEditingWebsite) return;
+
+        const name = document.getElementById('editWebsiteName').value.trim();
+        const url = document.getElementById('editWebsiteUrl').value.trim();
+        const icon = document.getElementById('editWebsiteIcon').value.trim();
+
+        if (!name || !url) {
+            alert('請填寫網站名稱和網址！');
+            return;
+        }
+
+        const currentDesktop = this.desktops[this.currentDesktopId];
+        const website = currentDesktop.websites.find(w => w.id === this.currentEditingWebsite.id);
+        
+        if (website) {
+            const finalUrl = url.startsWith('http') ? url : 'https://' + url;
+            website.name = name;
+            website.url = finalUrl;
+            website.icon = icon || this.getFaviconUrl(finalUrl);
+            
+            this.saveData();
+            this.renderCurrentDesktop();
+            this.hideModal('editWebsiteModal');
+            
+            // 清空表單
+            document.getElementById('editWebsiteName').value = '';
+            document.getElementById('editWebsiteUrl').value = '';
+            document.getElementById('editWebsiteIcon').value = '';
+        }
     }
 
     // 搜索功能

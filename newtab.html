@@ -57,6 +57,18 @@
         </div>
     </div>
 
+    <!-- 圖示右鍵選單 -->
+    <div class="context-menu" id="iconContextMenu">
+        <div class="menu-item" id="editWebsiteBtn">
+            <span class="menu-icon">✏️</span>
+            <span>編輯網站資訊</span>
+        </div>
+        <div class="menu-item" id="deleteWebsiteBtn">
+            <span class="menu-icon">🗑️</span>
+            <span>刪除網站</span>
+        </div>
+    </div>
+
     <!-- 新增網址對話框 -->
     <div class="modal" id="addWebsiteModal">
         <div class="modal-content">
@@ -125,6 +137,34 @@
             <div class="modal-footer">
                 <button class="btn-secondary" id="cancelRename">取消</button>
                 <button class="btn-primary" id="confirmRename">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯網站資訊對話框 -->
+    <div class="modal" id="editWebsiteModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>編輯網站資訊</h3>
+                <button class="modal-close" id="closeEditModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="editWebsiteName">網站名稱：</label>
+                    <input type="text" id="editWebsiteName" placeholder="例如：Google">
+                </div>
+                <div class="form-group">
+                    <label for="editWebsiteUrl">網址：</label>
+                    <input type="url" id="editWebsiteUrl" placeholder="例如：https://google.com">
+                </div>
+                <div class="form-group">
+                    <label for="editWebsiteIcon">圖示網址：</label>
+                    <input type="url" id="editWebsiteIcon" placeholder="選填 - 留空自動抓取網站favicon">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelEdit">取消</button>
+                <button class="btn-primary" id="confirmEdit">確認修改</button>
             </div>
         </div>
     </div>
