@@ -11,32 +11,25 @@ class WinDesk {
     }
 
     async init() {
-        await this.loadData();
-        this.setupEventListeners();
-        this.renderDesktops();
-        this.renderCurrentDesktop();
-        this.handleSearch();
-    }
-
-    // 數據管理
-    async loadData() {
+        console.log('WinDesk initializing...');
         try {
-            const data = await chrome.storage.sync.get(['windesk_data']);
-            if (data.windesk_data) {
-                this.desktops = data.windesk_data.desktops || {};
-                this.currentDesktopId = data.windesk_data.currentDesktopId || 'default';
-            }
+            await this.loadData();
+            console.log('Data loaded, desktops:', Object.keys(this.desktops), 'current:', this.currentDesktopId);
             
-            // 確保有預設桌面
-            if (!this.desktops[this.currentDesktopId]) {
-                this.desktops[this.currentDesktopId] = {
-                    name: '主桌面',
-                    websites: [],
-                    background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
-                };
-            }
+            this.setupEventListeners();
+            console.log('Event listeners set up');
+            
+            this.renderDesktops();
+            console.log('Desktops rendered');
+            
+            this.renderCurrentDesktop();
+            console.log('Current desktop rendered');
+            
+            this.handleSearch();
+            console.log('WinDesk initialization complete');
         } catch (error) {
-            console.error('Failed to load data:', error);
+            console.error('Failed to initialize WinDesk:', error);
+            // 緊急恢復
             this.desktops = {
                 'default': {
                     name: '主桌面',
@@ -44,19 +37,161 @@ class WinDesk {
                     background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
                 }
             };
+            this.currentDesktopId = 'default';
+            await this.saveData();
+            this.setupEventListeners();
+            this.renderDesktops();
+            this.renderCurrentDesktop();
         }
+    }
+
+    // 數據管理
+    async loadData() {
+        let dataLoaded = false;
+        
+        try {
+            // 優先從本地儲存載入（更可靠）
+            const localData = await chrome.storage.local.get(['windesk_data']);
+            if (localData.windesk_data && localData.windesk_data.desktops) {
+                this.desktops = localData.windesk_data.desktops;
+                this.currentDesktopId = localData.windesk_data.currentDesktopId || 'default';
+                dataLoaded = true;
+                console.log('Data loaded from local storage');
+            }
+        } catch (localError) {
+            console.warn('Failed to load from local storage:', localError);
+        }
+        
+        // 如果本地儲存失敗，嘗試從同步儲存載入
+        if (!dataLoaded) {
+            try {
+                const syncData = await chrome.storage.sync.get(['windesk_data']);
+                if (syncData.windesk_data && syncData.windesk_data.desktops) {
+                    this.desktops = syncData.windesk_data.desktops;
+                    this.currentDesktopId = syncData.windesk_data.currentDesktopId || 'default';
+                    dataLoaded = true;
+                    console.log('Data loaded from sync storage');
+                    // 將同步數據備份到本地儲存
+                    await chrome.storage.local.set({
+                        windesk_data: {
+                            desktops: this.desktops,
+                            currentDesktopId: this.currentDesktopId,
+                            lastSaveTime: Date.now()
+                        }
+                    });
+                }
+            } catch (syncError) {
+                console.warn('Failed to load from sync storage:', syncError);
+            }
+        }
+        
+        // 確保桌面數據完整性
+        if (!dataLoaded || !this.desktops || Object.keys(this.desktops).length === 0) {
+            // 如果沒有任何桌面，創建預設桌面
+            this.desktops = {
+                'default': {
+                    name: '主桌面',
+                    websites: [],
+                    background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
+                }
+            };
+            this.currentDesktopId = 'default';
+            console.log('Created default desktop');
+        } else if (!this.desktops[this.currentDesktopId]) {
+            // 如果當前桌面不存在，使用第一個可用的桌面或創建新的
+            const availableDesktopIds = Object.keys(this.desktops);
+            if (availableDesktopIds.length > 0) {
+                this.currentDesktopId = availableDesktopIds[0];
+                console.log('Switched to available desktop:', this.currentDesktopId);
+            } else {
+                // 如果沒有可用桌面，創建預設桌面
+                this.desktops['default'] = {
+                    name: '主桌面',
+                    websites: [],
+                    background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
+                };
+                this.currentDesktopId = 'default';
+                console.log('Created fallback desktop');
+            }
+        }
+        
+        // 立即保存修復後的數據
+        await this.saveData();
     }
 
     async saveData() {
         try {
-            await chrome.storage.sync.set({
-                windesk_data: {
-                    desktops: this.desktops,
-                    currentDesktopId: this.currentDesktopId
-                }
-            });
+            // 驗證數據完整性
+            if (!this.desktops || Object.keys(this.desktops).length === 0 || !this.currentDesktopId) {
+                console.warn('Invalid data detected, skipping save');
+                return;
+            }
+            
+            const dataToSave = {
+                desktops: this.desktops,
+                currentDesktopId: this.currentDesktopId,
+                lastSaveTime: Date.now()
+            };
+            
+            // 優先使用本地儲存（立即生效，更可靠）
+            await chrome.storage.local.set({ windesk_data: dataToSave });
+            console.log('Data saved to local storage successfully');
+            
+            // 同時嘗試同步儲存（跨裝置同步）
+            try {
+                await chrome.storage.sync.set({ windesk_data: dataToSave });
+                console.log('Data synced successfully');
+            } catch (syncError) {
+                console.warn('Sync storage failed, but local storage succeeded:', syncError);
+            }
+            
         } catch (error) {
-            console.error('Failed to save data:', error);
+            console.error('Failed to save data to local storage:', error);
+            
+            // 本地儲存失敗時，嘗試同步儲存作為備份
+            try {
+                const dataToSave = {
+                    desktops: this.desktops,
+                    currentDesktopId: this.currentDesktopId,
+                    lastSaveTime: Date.now()
+                };
+                await chrome.storage.sync.set({ windesk_data: dataToSave });
+                console.log('Data saved to sync storage as fallback');
+            } catch (fallbackError) {
+                console.error('All storage methods failed:', fallbackError);
+                alert('無法保存設定，請檢查瀏覽器權限設定');
+            }
+        }
+    }
+
+    // 同步保存方法（用於頁面關閉前）
+    saveDataSync() {
+        try {
+            // 驗證數據完整性
+            if (!this.desktops || Object.keys(this.desktops).length === 0 || !this.currentDesktopId) {
+                console.warn('Invalid data detected, skipping sync save');
+                return;
+            }
+            
+            const dataToSave = {
+                desktops: this.desktops,
+                currentDesktopId: this.currentDesktopId,
+                lastSaveTime: Date.now()
+            };
+            
+            // 使用同步API確保立即保存
+            chrome.storage.local.set({ windesk_data: dataToSave });
+            
+            // 也嘗試同步儲存
+            try {
+                chrome.storage.sync.set({ windesk_data: dataToSave });
+            } catch (syncError) {
+                console.warn('Sync save failed:', syncError);
+            }
+            
+            console.log('Data saved synchronously before unload');
+        } catch (error) {
+            console.error('Failed to save data synchronously:', error);
         }
     }
 
@@ -224,6 +359,24 @@ class WinDesk {
                 this.clearSelection();
             }
         });
+
+        // 頁面關閉前確保資料保存
+        window.addEventListener('beforeunload', (e) => {
+            // 使用同步保存確保立即生效
+            this.saveDataSync();
+        });
+
+        // 頁面隱藏時保存數據（例如切換到其他分頁）
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.saveData();
+            }
+        });
+
+        // 定期自動保存（每30秒）
+        setInterval(() => {
+            this.saveData();
+        }, 30000);
     }
 
     // 選取功能
@@ -398,8 +551,21 @@ class WinDesk {
         if (confirm('確定要刪除這個桌面嗎？')) {
             delete this.desktops[desktopId];
             
+            // 如果刪除的是當前桌面，切換到第一個可用桌面
             if (this.currentDesktopId === desktopId) {
-                this.currentDesktopId = Object.keys(this.desktops)[0];
+                const availableDesktops = Object.keys(this.desktops);
+                if (availableDesktops.length > 0) {
+                    this.currentDesktopId = availableDesktops[0];
+                } else {
+                    // 緊急情況：沒有可用桌面，創建新的預設桌面
+                    console.error('No available desktops after deletion, creating default');
+                    this.desktops['default'] = {
+                        name: '主桌面',
+                        websites: [],
+                        background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
+                    };
+                    this.currentDesktopId = 'default';
+                }
             }
             
             this.saveData();
@@ -433,6 +599,20 @@ class WinDesk {
     renderDesktops() {
         const desktopList = document.getElementById('desktopList');
         desktopList.innerHTML = '';
+        
+        // 確保至少有一個桌面
+        if (!this.desktops || Object.keys(this.desktops).length === 0) {
+            console.warn('No desktops found, creating default desktop');
+            this.desktops = {
+                'default': {
+                    name: '主桌面',
+                    websites: [],
+                    background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
+                }
+            };
+            this.currentDesktopId = 'default';
+            this.saveData();
+        }
 
         for (const [id, desktop] of Object.entries(this.desktops)) {
             const desktopElement = document.createElement('div');
@@ -561,10 +741,34 @@ class WinDesk {
 
     renderCurrentDesktop() {
         const desktopContent = document.getElementById('desktopContent');
+        
+        // 確保當前桌面存在，如果不存在則重新初始化
+        if (!this.desktops[this.currentDesktopId]) {
+            console.warn('Current desktop not found, recreating...');
+            this.desktops[this.currentDesktopId] = {
+                name: '主桌面',
+                websites: [],
+                background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
+            };
+            this.saveData();
+        }
+        
         const currentDesktop = this.desktops[this.currentDesktopId];
         
         if (!currentDesktop) {
-            desktopContent.innerHTML = '<div>桌面不存在</div>';
+            console.error('Failed to get current desktop, creating emergency desktop');
+            desktopContent.innerHTML = '<div style="color: white; text-align: center; padding: 20px;">正在重新載入桌面...</div>';
+            // 重新初始化
+            this.currentDesktopId = 'default';
+            this.desktops['default'] = {
+                name: '主桌面',
+                websites: [],
+                background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
+            };
+            this.saveData().then(() => {
+                this.renderCurrentDesktop();
+                this.renderDesktops();
+            });
             return;
         }
 
