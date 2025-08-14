@@ -237,11 +237,26 @@ class WinDesk {
             desktopElement.innerHTML = `
                 <div class="desktop-name">${desktop.name}</div>
                 <div class="desktop-actions">
-                    <button class="desktop-action-btn" onclick="windesk.showRenameDesktopModal('${id}')" title="重命名">✏️</button>
-                    <button class="desktop-action-btn" onclick="windesk.deleteDesktop('${id}')" title="刪除">🗑️</button>
+                    <button class="desktop-action-btn rename-btn" title="重命名">✏️</button>
+                    <button class="desktop-action-btn delete-btn" title="刪除">🗑️</button>
                 </div>
             `;
             
+            // 添加重命名按鈕事件
+            const renameBtn = desktopElement.querySelector('.rename-btn');
+            renameBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showRenameDesktopModal(id);
+            });
+            
+            // 添加刪除按鈕事件
+            const deleteBtn = desktopElement.querySelector('.delete-btn');
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteDesktop(id);
+            });
+            
+            // 桌面切換事件
             desktopElement.addEventListener('click', (e) => {
                 if (!e.target.closest('.desktop-actions')) {
                     this.switchDesktop(id);
