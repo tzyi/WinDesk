@@ -3,6 +3,7 @@ class WinDesk {
     constructor() {
         this.currentDesktopId = 'default';
         this.desktops = {};
+        this.desktopOrder = [];
         this.selectedIcons = new Set();
         this.isSelecting = false;
         this.selectionStart = null;
@@ -55,6 +56,7 @@ class WinDesk {
             if (localData.windesk_data && localData.windesk_data.desktops) {
                 this.desktops = localData.windesk_data.desktops;
                 this.currentDesktopId = localData.windesk_data.currentDesktopId || 'default';
+                this.desktopOrder = localData.windesk_data.desktopOrder || Object.keys(this.desktops);
                 dataLoaded = true;
                 console.log('Data loaded from local storage');
             }
@@ -69,6 +71,7 @@ class WinDesk {
                 if (syncData.windesk_data && syncData.windesk_data.desktops) {
                     this.desktops = syncData.windesk_data.desktops;
                     this.currentDesktopId = syncData.windesk_data.currentDesktopId || 'default';
+                    this.desktopOrder = syncData.windesk_data.desktopOrder || Object.keys(this.desktops);
                     dataLoaded = true;
                     console.log('Data loaded from sync storage');
                     // 將同步數據備份到本地儲存
@@ -76,6 +79,7 @@ class WinDesk {
                         windesk_data: {
                             desktops: this.desktops,
                             currentDesktopId: this.currentDesktopId,
+                            desktopOrder: this.desktopOrder,
                             lastSaveTime: Date.now()
                         }
                     });
@@ -96,6 +100,7 @@ class WinDesk {
                 }
             };
             this.currentDesktopId = 'default';
+            this.desktopOrder = ['default'];
             console.log('Created default desktop');
         } else if (!this.desktops[this.currentDesktopId]) {
             // 如果當前桌面不存在，使用第一個可用的桌面或創建新的
@@ -111,6 +116,7 @@ class WinDesk {
                     background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
                 };
                 this.currentDesktopId = 'default';
+                this.desktopOrder = ['default'];
                 console.log('Created fallback desktop');
             }
         }
@@ -130,6 +136,7 @@ class WinDesk {
             const dataToSave = {
                 desktops: this.desktops,
                 currentDesktopId: this.currentDesktopId,
+                desktopOrder: this.desktopOrder,
                 lastSaveTime: Date.now()
             };
             
@@ -176,6 +183,7 @@ class WinDesk {
             const dataToSave = {
                 desktops: this.desktops,
                 currentDesktopId: this.currentDesktopId,
+                desktopOrder: this.desktopOrder,
                 lastSaveTime: Date.now()
             };
             
@@ -530,6 +538,13 @@ class WinDesk {
             background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
         };
         
+        // 將新桌面添加到順序列表的末尾
+        if (!this.desktopOrder) {
+            this.desktopOrder = Object.keys(this.desktops);
+        } else {
+            this.desktopOrder.push(id);
+        }
+        
         this.saveData();
         this.renderDesktops();
     }
@@ -551,9 +566,17 @@ class WinDesk {
         if (confirm('確定要刪除這個桌面嗎？')) {
             delete this.desktops[desktopId];
             
+            // 從順序列表中移除
+            if (this.desktopOrder) {
+                const index = this.desktopOrder.indexOf(desktopId);
+                if (index > -1) {
+                    this.desktopOrder.splice(index, 1);
+                }
+            }
+            
             // 如果刪除的是當前桌面，切換到第一個可用桌面
             if (this.currentDesktopId === desktopId) {
-                const availableDesktops = Object.keys(this.desktops);
+                const availableDesktops = this.desktopOrder.length > 0 ? this.desktopOrder : Object.keys(this.desktops);
                 if (availableDesktops.length > 0) {
                     this.currentDesktopId = availableDesktops[0];
                 } else {
@@ -565,6 +588,7 @@ class WinDesk {
                         background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'
                     };
                     this.currentDesktopId = 'default';
+                    this.desktopOrder = ['default'];
                 }
             }
             
@@ -614,9 +638,28 @@ class WinDesk {
             this.saveData();
         }
 
-        for (const [id, desktop] of Object.entries(this.desktops)) {
+        // 獲取桌面順序（如果沒有設定則使用預設順序）
+        const desktopOrder = this.desktopOrder || Object.keys(this.desktops);
+        
+        // 確保所有桌面都在順序中
+        const allDesktops = Object.keys(this.desktops);
+        allDesktops.forEach(id => {
+            if (!desktopOrder.includes(id)) {
+                desktopOrder.push(id);
+            }
+        });
+        
+        // 移除不存在的桌面
+        this.desktopOrder = desktopOrder.filter(id => this.desktops[id]);
+
+        for (const id of this.desktopOrder) {
+            const desktop = this.desktops[id];
+            if (!desktop) continue;
+            
             const desktopElement = document.createElement('div');
             desktopElement.className = `desktop-item ${id === this.currentDesktopId ? 'active' : ''}`;
+            desktopElement.draggable = true;
+            desktopElement.dataset.desktopId = id;
             desktopElement.innerHTML = `
                 <div class="desktop-name">${desktop.name}</div>
                 <div class="desktop-actions">
@@ -624,6 +667,9 @@ class WinDesk {
                     <button class="desktop-action-btn delete-btn" title="刪除">🗑️</button>
                 </div>
             `;
+            
+            // 添加拖拽事件
+            this.setupDesktopDragEvents(desktopElement);
             
             // 添加重命名按鈕事件
             const renameBtn = desktopElement.querySelector('.rename-btn');
@@ -1105,6 +1151,87 @@ class WinDesk {
         return 0;
     }
 
+    // 桌面拖拽功能
+    setupDesktopDragEvents(desktopElement) {
+        const desktopId = desktopElement.dataset.desktopId;
+        
+        desktopElement.addEventListener('dragstart', (e) => {
+            // 防止在按鈕上拖拽
+            if (e.target.closest('.desktop-actions')) {
+                e.preventDefault();
+                return;
+            }
+            
+            console.log('Desktop drag start:', desktopId);
+            e.dataTransfer.setData('text/plain', `desktop:${desktopId}`);
+            e.dataTransfer.effectAllowed = 'move';
+            desktopElement.classList.add('dragging');
+        });
+
+        desktopElement.addEventListener('dragend', (e) => {
+            console.log('Desktop drag end');
+            desktopElement.classList.remove('dragging');
+        });
+
+        desktopElement.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const dragData = e.dataTransfer.types.includes('text/plain');
+            if (dragData) {
+                desktopElement.classList.add('drag-over');
+            }
+        });
+
+        desktopElement.addEventListener('dragleave', (e) => {
+            // 只有當離開的是desktop本身而不是子元素時才移除樣式
+            if (!desktopElement.contains(e.relatedTarget)) {
+                desktopElement.classList.remove('drag-over');
+            }
+        });
+
+        desktopElement.addEventListener('drop', (e) => {
+            e.preventDefault();
+            desktopElement.classList.remove('drag-over');
+            
+            const transferData = e.dataTransfer.getData('text/plain');
+            if (transferData && transferData.startsWith('desktop:')) {
+                const draggedDesktopId = transferData.replace('desktop:', '');
+                const dropTargetId = desktopElement.dataset.desktopId;
+                
+                if (draggedDesktopId !== dropTargetId) {
+                    this.reorderDesktop(draggedDesktopId, dropTargetId);
+                }
+            }
+        });
+    }
+
+    reorderDesktop(draggedDesktopId, dropTargetId) {
+        console.log('Reordering desktop:', draggedDesktopId, 'to position of:', dropTargetId);
+        
+        const draggedIndex = this.desktopOrder.indexOf(draggedDesktopId);
+        const dropTargetIndex = this.desktopOrder.indexOf(dropTargetId);
+        
+        if (draggedIndex === -1 || dropTargetIndex === -1) {
+            console.warn('Invalid desktop IDs for reordering');
+            return;
+        }
+        
+        // 移除被拖拽的項目
+        this.desktopOrder.splice(draggedIndex, 1);
+        
+        // 重新計算目標位置（因為移除了一個項目，索引可能改變）
+        const newTargetIndex = this.desktopOrder.indexOf(dropTargetId);
+        
+        // 將被拖拽的項目插入到目標位置之前
+        this.desktopOrder.splice(newTargetIndex, 0, draggedDesktopId);
+        
+        console.log('New desktop order:', this.desktopOrder);
+        
+        this.saveData();
+        this.renderDesktops();
+    }
+
     // 背景管理
     updateBackground() {
         const desktopArea = document.getElementById('desktopArea');
@@ -1304,6 +1431,7 @@ class WinDesk {
                     if (confirm('確定要匯入這個設定嗎？這將會覆蓋當前的所有桌面設定。')) {
                         this.desktops = data.desktops;
                         this.currentDesktopId = data.currentDesktopId || Object.keys(data.desktops)[0];
+                        this.desktopOrder = data.desktopOrder || Object.keys(data.desktops);
                         
                         // 確保當前桌面存在
                         if (!this.desktops[this.currentDesktopId]) {
