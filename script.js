@@ -61,6 +61,7 @@ class WinDesk {
                 this.desktopOrder = localData.windesk_data.desktopOrder || Object.keys(this.desktops);
                 this.folders = localData.windesk_data.folders || {};
                 this.folderOrder = localData.windesk_data.folderOrder || [];
+                this.topLevelOrder = localData.windesk_data.topLevelOrder || null;
                 dataLoaded = true;
                 console.log('Data loaded from local storage');
             }
@@ -78,6 +79,7 @@ class WinDesk {
                     this.desktopOrder = syncData.windesk_data.desktopOrder || Object.keys(this.desktops);
                     this.folders = syncData.windesk_data.folders || {};
                     this.folderOrder = syncData.windesk_data.folderOrder || [];
+                    this.topLevelOrder = syncData.windesk_data.topLevelOrder || null;
                     dataLoaded = true;
                     console.log('Data loaded from sync storage');
                     // 將同步數據備份到本地儲存
@@ -145,6 +147,7 @@ class WinDesk {
                 desktopOrder: this.desktopOrder,
                 folders: this.folders,
                 folderOrder: this.folderOrder,
+                topLevelOrder: this.topLevelOrder || null,
                 lastSaveTime: Date.now()
             };
 
@@ -171,6 +174,7 @@ class WinDesk {
                     desktopOrder: this.desktopOrder,
                     folders: this.folders,
                     folderOrder: this.folderOrder,
+                    topLevelOrder: this.topLevelOrder || null,
                     lastSaveTime: Date.now()
                 };
                 await chrome.storage.sync.set({ windesk_data: dataToSave });
@@ -197,6 +201,7 @@ class WinDesk {
                 desktopOrder: this.desktopOrder,
                 folders: this.folders,
                 folderOrder: this.folderOrder,
+                topLevelOrder: this.topLevelOrder || null,
                 lastSaveTime: Date.now()
             };
 
@@ -769,21 +774,45 @@ class WinDesk {
             this.folders[fid].desktopIds = this.folders[fid].desktopIds.filter(did => this.desktops[did]);
         });
 
-        // 渲染資料夾（先）
-        for (const folderId of this.folderOrder) {
-            const folder = this.folders[folderId];
-            if (!folder) continue;
-            const folderEl = this._createFolderElement(folderId, folder);
-            desktopList.appendChild(folderEl);
+        // 合併 folderOrder 和 desktopOrder 成統一頂層順序
+        if (!this.topLevelOrder) {
+            this.topLevelOrder = [];
+            for (const fid of this.folderOrder) this.topLevelOrder.push({ type: 'folder', id: fid });
+            for (const did of this.desktopOrder) this.topLevelOrder.push({ type: 'desktop', id: did });
+        } else {
+            // 補上新加入的
+            for (const fid of this.folderOrder) {
+                if (!this.topLevelOrder.find(x => x.type === 'folder' && x.id === fid))
+                    this.topLevelOrder.push({ type: 'folder', id: fid });
+            }
+            for (const did of this.desktopOrder) {
+                if (!this.topLevelOrder.find(x => x.type === 'desktop' && x.id === did))
+                    this.topLevelOrder.push({ type: 'desktop', id: did });
+            }
+            // 移除不存在的
+            this.topLevelOrder = this.topLevelOrder.filter(x =>
+                (x.type === 'folder' && this.folders[x.id]) ||
+                (x.type === 'desktop' && this.desktops[x.id] && !this.desktops[x.id].folderId)
+            );
         }
+        // 同步回 folderOrder / desktopOrder
+        this.folderOrder = this.topLevelOrder.filter(x => x.type === 'folder').map(x => x.id);
+        this.desktopOrder = this.topLevelOrder.filter(x => x.type === 'desktop').map(x => x.id);
 
-        // 渲染頂層桌面
-        for (const id of this.desktopOrder) {
-            const desktop = this.desktops[id];
-            if (!desktop) continue;
-            const desktopElement = this._createDesktopElement(id, desktop);
-            desktopElement.classList.add('root-level');
-            desktopList.appendChild(desktopElement);
+        // 按統一順序渲染
+        for (const item of this.topLevelOrder) {
+            if (item.type === 'folder') {
+                const folder = this.folders[item.id];
+                if (!folder) continue;
+                const folderEl = this._createFolderElement(item.id, folder);
+                desktopList.appendChild(folderEl);
+            } else {
+                const desktop = this.desktops[item.id];
+                if (!desktop) continue;
+                const desktopElement = this._createDesktopElement(item.id, desktop);
+                desktopElement.classList.add('root-level');
+                desktopList.appendChild(desktopElement);
+            }
         }
 
         // sidebar 空白處接受 drop：拖到資料夾外即移到頂層
@@ -849,7 +878,22 @@ class WinDesk {
             this.deleteFolder(folderId);
         });
 
-        // 拖曳資料夾內的桌面進來
+        // 資料夾本身可拖曳排序
+        folderEl.draggable = true;
+        folderEl.addEventListener('dragstart', (e) => {
+            if (e.target.closest('.folder-actions')) {
+                e.preventDefault();
+                return;
+            }
+            e.dataTransfer.setData('text/plain', `folder:${folderId}`);
+            e.dataTransfer.effectAllowed = 'move';
+            folderEl.classList.add('dragging');
+        });
+        folderEl.addEventListener('dragend', () => {
+            folderEl.classList.remove('dragging');
+        });
+
+        // 拖曳桌面或資料夾進來
         header.addEventListener('dragover', (e) => {
             const data = e.dataTransfer.types.includes('text/plain');
             if (data) {
@@ -867,6 +911,11 @@ class WinDesk {
             if (transferData && transferData.startsWith('desktop:')) {
                 const draggedId = transferData.replace('desktop:', '');
                 this._moveDesktopToFolder(draggedId, folderId);
+            } else if (transferData && transferData.startsWith('folder:')) {
+                const draggedFolderId = transferData.replace('folder:', '');
+                if (draggedFolderId !== folderId) {
+                    this.reorderFolderOrDesktop(draggedFolderId, 'folder', folderId, 'folder');
+                }
             }
         });
 
@@ -1442,15 +1491,17 @@ class WinDesk {
         desktopElement.addEventListener('drop', (e) => {
             e.preventDefault();
             desktopElement.classList.remove('drag-over');
-            
+
             const transferData = e.dataTransfer.getData('text/plain');
+            const dropTargetId = desktopElement.dataset.desktopId;
             if (transferData && transferData.startsWith('desktop:')) {
                 const draggedDesktopId = transferData.replace('desktop:', '');
-                const dropTargetId = desktopElement.dataset.desktopId;
-                
                 if (draggedDesktopId !== dropTargetId) {
                     this.reorderDesktop(draggedDesktopId, dropTargetId);
                 }
+            } else if (transferData && transferData.startsWith('folder:')) {
+                const draggedFolderId = transferData.replace('folder:', '');
+                this.reorderFolderOrDesktop(draggedFolderId, 'folder', dropTargetId, 'desktop');
             }
         });
     }
@@ -1476,12 +1527,8 @@ class WinDesk {
             arr.splice(arr.indexOf(dropTargetId), 0, draggedDesktopId);
         } else if (!draggedFolderId && !dropTargetFolderId) {
             // 都在頂層
-            const draggedIndex = this.desktopOrder.indexOf(draggedDesktopId);
-            const dropTargetIndex = this.desktopOrder.indexOf(dropTargetId);
-            if (draggedIndex === -1 || dropTargetIndex === -1) return;
-            this.desktopOrder.splice(draggedIndex, 1);
-            const newTargetIndex = this.desktopOrder.indexOf(dropTargetId);
-            this.desktopOrder.splice(newTargetIndex, 0, draggedDesktopId);
+            this.reorderFolderOrDesktop(draggedDesktopId, 'desktop', dropTargetId, 'desktop');
+            return;
         } else {
             // 跨資料夾移動：移到目標桌面所在的資料夾（或頂層）
             if (dropTargetFolderId) {
@@ -1496,6 +1543,25 @@ class WinDesk {
                 this._moveDesktopToFolder(draggedDesktopId, null);
             }
         }
+
+        this.saveData();
+        this.renderDesktops();
+    }
+
+    // 重排資料夾或桌面在頂層列表中的位置
+    reorderFolderOrDesktop(draggedId, draggedType, targetId, targetType) {
+        const topOrder = this.topLevelOrder ? [...this.topLevelOrder] : [];
+        const draggedIdx = topOrder.findIndex(x => x.type === draggedType && x.id === draggedId);
+        const targetIdx = topOrder.findIndex(x => x.type === targetType && x.id === targetId);
+        if (draggedIdx === -1 || targetIdx === -1) return;
+
+        const [removed] = topOrder.splice(draggedIdx, 1);
+        const newTargetIdx = topOrder.findIndex(x => x.type === targetType && x.id === targetId);
+        topOrder.splice(newTargetIdx, 0, removed);
+
+        this.topLevelOrder = topOrder;
+        this.folderOrder = topOrder.filter(x => x.type === 'folder').map(x => x.id);
+        this.desktopOrder = topOrder.filter(x => x.type === 'desktop').map(x => x.id);
 
         this.saveData();
         this.renderDesktops();
