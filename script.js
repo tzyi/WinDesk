@@ -4,6 +4,8 @@ class WinDesk {
         this.currentDesktopId = 'default';
         this.desktops = {};
         this.desktopOrder = [];
+        this.folders = {};
+        this.folderOrder = [];
         this.selectedIcons = new Set();
         this.isSelecting = false;
         this.selectionStart = null;
@@ -57,6 +59,8 @@ class WinDesk {
                 this.desktops = localData.windesk_data.desktops;
                 this.currentDesktopId = localData.windesk_data.currentDesktopId || 'default';
                 this.desktopOrder = localData.windesk_data.desktopOrder || Object.keys(this.desktops);
+                this.folders = localData.windesk_data.folders || {};
+                this.folderOrder = localData.windesk_data.folderOrder || [];
                 dataLoaded = true;
                 console.log('Data loaded from local storage');
             }
@@ -72,6 +76,8 @@ class WinDesk {
                     this.desktops = syncData.windesk_data.desktops;
                     this.currentDesktopId = syncData.windesk_data.currentDesktopId || 'default';
                     this.desktopOrder = syncData.windesk_data.desktopOrder || Object.keys(this.desktops);
+                    this.folders = syncData.windesk_data.folders || {};
+                    this.folderOrder = syncData.windesk_data.folderOrder || [];
                     dataLoaded = true;
                     console.log('Data loaded from sync storage');
                     // 將同步數據備份到本地儲存
@@ -137,9 +143,11 @@ class WinDesk {
                 desktops: this.desktops,
                 currentDesktopId: this.currentDesktopId,
                 desktopOrder: this.desktopOrder,
+                folders: this.folders,
+                folderOrder: this.folderOrder,
                 lastSaveTime: Date.now()
             };
-            
+
             // 優先使用本地儲存（立即生效，更可靠）
             await chrome.storage.local.set({ windesk_data: dataToSave });
             console.log('Data saved to local storage successfully');
@@ -160,6 +168,9 @@ class WinDesk {
                 const dataToSave = {
                     desktops: this.desktops,
                     currentDesktopId: this.currentDesktopId,
+                    desktopOrder: this.desktopOrder,
+                    folders: this.folders,
+                    folderOrder: this.folderOrder,
                     lastSaveTime: Date.now()
                 };
                 await chrome.storage.sync.set({ windesk_data: dataToSave });
@@ -184,9 +195,11 @@ class WinDesk {
                 desktops: this.desktops,
                 currentDesktopId: this.currentDesktopId,
                 desktopOrder: this.desktopOrder,
+                folders: this.folders,
+                folderOrder: this.folderOrder,
                 lastSaveTime: Date.now()
             };
-            
+
             // 使用同步API確保立即保存
             chrome.storage.local.set({ windesk_data: dataToSave });
             
@@ -208,6 +221,11 @@ class WinDesk {
         // 新增桌面按鈕
         document.querySelector('.add-desktop-btn').addEventListener('click', () => {
             this.addDesktop();
+        });
+
+        // 新增資料夾按鈕
+        document.querySelector('.add-folder-btn').addEventListener('click', () => {
+            this.addFolder();
         });
 
         // 右鍵選單
@@ -299,6 +317,19 @@ class WinDesk {
 
         document.getElementById('confirmRename').addEventListener('click', () => {
             this.renameDesktop();
+        });
+
+        // 重命名資料夾模態
+        document.getElementById('closeRenameFolderModal').addEventListener('click', () => {
+            this.hideModal('renameFolderModal');
+        });
+
+        document.getElementById('cancelRenameFolder').addEventListener('click', () => {
+            this.hideModal('renameFolderModal');
+        });
+
+        document.getElementById('confirmRenameFolder').addEventListener('click', () => {
+            this.renameFolder();
         });
 
         // 文件選擇處理
@@ -527,6 +558,80 @@ class WinDesk {
         });
     }
 
+    // 資料夾管理
+    addFolder() {
+        const id = 'folder_' + Date.now();
+        const name = `資料夾 ${Object.keys(this.folders).length + 1}`;
+        this.folders[id] = { name, desktopIds: [], collapsed: false };
+        this.folderOrder.push(id);
+        this.saveData();
+        this.renderDesktops();
+    }
+
+    deleteFolder(folderId) {
+        if (!confirm('確定要刪除這個資料夾嗎？（資料夾內的桌面將移到頂層）')) return;
+        const folder = this.folders[folderId];
+        if (folder) {
+            // 把資料夾內的桌面移到頂層
+            folder.desktopIds.forEach(did => {
+                if (!this.desktopOrder.includes(did)) {
+                    this.desktopOrder.push(did);
+                }
+                if (this.desktops[did]) {
+                    delete this.desktops[did].folderId;
+                }
+            });
+        }
+        delete this.folders[folderId];
+        const idx = this.folderOrder.indexOf(folderId);
+        if (idx > -1) this.folderOrder.splice(idx, 1);
+        this.saveData();
+        this.renderDesktops();
+    }
+
+    showRenameFolderModal(folderId) {
+        const modal = document.getElementById('renameFolderModal');
+        document.getElementById('folderName').value = this.folders[folderId].name;
+        modal.dataset.folderId = folderId;
+        this.showModal('renameFolderModal');
+    }
+
+    renameFolder() {
+        const modal = document.getElementById('renameFolderModal');
+        const folderId = modal.dataset.folderId;
+        const newName = document.getElementById('folderName').value.trim();
+        if (newName && this.folders[folderId]) {
+            this.folders[folderId].name = newName;
+            this.saveData();
+            this.renderDesktops();
+            this.hideModal('renameFolderModal');
+        }
+    }
+
+    toggleFolder(folderId) {
+        if (this.folders[folderId]) {
+            this.folders[folderId].collapsed = !this.folders[folderId].collapsed;
+            this.saveData();
+            this.renderDesktops();
+        }
+    }
+
+    addDesktopToFolder(folderId) {
+        const id = 'desktop_' + Date.now();
+        const folder = this.folders[folderId];
+        const name = `桌面 ${Object.keys(this.desktops).length + 1}`;
+        this.desktops[id] = {
+            name,
+            websites: [],
+            background: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80',
+            folderId
+        };
+        folder.desktopIds.push(id);
+        this.saveData();
+        this.renderDesktops();
+        this.switchDesktop(id);
+    }
+
     // 桌面管理
     addDesktop() {
         const id = 'desktop_' + Date.now();
@@ -565,18 +670,24 @@ class WinDesk {
 
         if (confirm('確定要刪除這個桌面嗎？')) {
             delete this.desktops[desktopId];
-            
-            // 從順序列表中移除
+
+            // 從頂層順序列表中移除
             if (this.desktopOrder) {
                 const index = this.desktopOrder.indexOf(desktopId);
-                if (index > -1) {
-                    this.desktopOrder.splice(index, 1);
-                }
+                if (index > -1) this.desktopOrder.splice(index, 1);
+            }
+
+            // 從資料夾中移除
+            if (this.folders) {
+                Object.keys(this.folders).forEach(fid => {
+                    const idx = this.folders[fid].desktopIds.indexOf(desktopId);
+                    if (idx > -1) this.folders[fid].desktopIds.splice(idx, 1);
+                });
             }
             
             // 如果刪除的是當前桌面，切換到第一個可用桌面
             if (this.currentDesktopId === desktopId) {
-                const availableDesktops = this.desktopOrder.length > 0 ? this.desktopOrder : Object.keys(this.desktops);
+                const availableDesktops = Object.keys(this.desktops);
                 if (availableDesktops.length > 0) {
                     this.currentDesktopId = availableDesktops[0];
                 } else {
@@ -623,10 +734,9 @@ class WinDesk {
     renderDesktops() {
         const desktopList = document.getElementById('desktopList');
         desktopList.innerHTML = '';
-        
+
         // 確保至少有一個桌面
         if (!this.desktops || Object.keys(this.desktops).length === 0) {
-            console.warn('No desktops found, creating default desktop');
             this.desktops = {
                 'default': {
                     name: '主桌面',
@@ -638,61 +748,200 @@ class WinDesk {
             this.saveData();
         }
 
-        // 獲取桌面順序（如果沒有設定則使用預設順序）
-        const desktopOrder = this.desktopOrder || Object.keys(this.desktops);
-        
-        // 確保所有桌面都在順序中
-        const allDesktops = Object.keys(this.desktops);
-        allDesktops.forEach(id => {
-            if (!desktopOrder.includes(id)) {
-                desktopOrder.push(id);
+        // 初始化資料夾結構
+        if (!this.folders) this.folders = {};
+        if (!this.folderOrder) this.folderOrder = [];
+
+        // 整理 desktopOrder：加入遺漏的、移除不存在的
+        const allDesktopIds = Object.keys(this.desktops);
+        allDesktopIds.forEach(id => {
+            const inFolder = Object.values(this.folders).some(f => f.desktopIds.includes(id));
+            if (!inFolder && !this.desktopOrder.includes(id)) {
+                this.desktopOrder.push(id);
             }
         });
-        
-        // 移除不存在的桌面
-        this.desktopOrder = desktopOrder.filter(id => this.desktops[id]);
+        this.desktopOrder = this.desktopOrder.filter(id => this.desktops[id] && !this.desktops[id].folderId);
 
+        // 整理資料夾的 desktopIds
+        this.folderOrder = this.folderOrder.filter(fid => this.folders[fid]);
+        Object.keys(this.folders).forEach(fid => {
+            if (!this.folderOrder.includes(fid)) this.folderOrder.push(fid);
+            this.folders[fid].desktopIds = this.folders[fid].desktopIds.filter(did => this.desktops[did]);
+        });
+
+        // 渲染資料夾（先）
+        for (const folderId of this.folderOrder) {
+            const folder = this.folders[folderId];
+            if (!folder) continue;
+            const folderEl = this._createFolderElement(folderId, folder);
+            desktopList.appendChild(folderEl);
+        }
+
+        // 渲染頂層桌面
         for (const id of this.desktopOrder) {
             const desktop = this.desktops[id];
             if (!desktop) continue;
-            
-            const desktopElement = document.createElement('div');
-            desktopElement.className = `desktop-item ${id === this.currentDesktopId ? 'active' : ''}`;
-            desktopElement.draggable = true;
-            desktopElement.dataset.desktopId = id;
-            desktopElement.innerHTML = `
-                <div class="desktop-name">${desktop.name}</div>
-                <div class="desktop-actions">
-                    <button class="desktop-action-btn rename-btn" title="重命名">✏️</button>
-                    <button class="desktop-action-btn delete-btn" title="刪除">🗑️</button>
-                </div>
-            `;
-            
-            // 添加拖拽事件
-            this.setupDesktopDragEvents(desktopElement);
-            
-            // 添加重命名按鈕事件
-            const renameBtn = desktopElement.querySelector('.rename-btn');
-            renameBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.showRenameDesktopModal(id);
-            });
-            
-            // 添加刪除按鈕事件
-            const deleteBtn = desktopElement.querySelector('.delete-btn');
-            deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.deleteDesktop(id);
-            });
-            
-            // 桌面切換事件
-            desktopElement.addEventListener('click', (e) => {
-                if (!e.target.closest('.desktop-actions')) {
-                    this.switchDesktop(id);
-                }
-            });
-
+            const desktopElement = this._createDesktopElement(id, desktop);
+            desktopElement.classList.add('root-level');
             desktopList.appendChild(desktopElement);
+        }
+
+        // sidebar 空白處接受 drop：拖到資料夾外即移到頂層
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+        sidebar.addEventListener('drop', (e) => {
+            // 若 drop 目標是資料夾或桌面項目則不處理（由各自的 drop 處理）
+            if (e.target.closest('.folder-header') || e.target.closest('.desktop-item')) return;
+            e.preventDefault();
+            const transferData = e.dataTransfer.getData('text/plain');
+            if (transferData && transferData.startsWith('desktop:')) {
+                const draggedId = transferData.replace('desktop:', '');
+                const inFolder = Object.values(this.folders).some(f => f.desktopIds.includes(draggedId));
+                if (inFolder) {
+                    this._moveDesktopToFolder(draggedId, null);
+                    this.saveData();
+                    this.renderDesktops();
+                }
+            }
+        });
+    }
+
+    _createFolderElement(folderId, folder) {
+        const folderEl = document.createElement('div');
+        folderEl.className = 'folder-item';
+        folderEl.dataset.folderId = folderId;
+
+        const expanded = !folder.collapsed;
+        const header = document.createElement('div');
+        header.className = 'folder-header';
+        header.innerHTML = `
+            <span class="folder-toggle ${expanded ? 'expanded' : ''}">▶</span>
+            <span class="folder-icon">📁</span>
+            <span class="folder-name">${folder.name}</span>
+            <div class="folder-actions">
+                <button class="folder-action-btn add-to-folder-btn" title="在此資料夾新增桌面">+</button>
+                <button class="folder-action-btn rename-folder-btn" title="重命名資料夾">✏️</button>
+                <button class="folder-action-btn delete-folder-btn" title="刪除資料夾">🗑️</button>
+            </div>
+        `;
+
+        // 折疊/展開
+        header.addEventListener('click', (e) => {
+            if (!e.target.closest('.folder-actions')) {
+                this.toggleFolder(folderId);
+            }
+        });
+
+        header.querySelector('.add-to-folder-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.addDesktopToFolder(folderId);
+        });
+
+        header.querySelector('.rename-folder-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showRenameFolderModal(folderId);
+        });
+
+        header.querySelector('.delete-folder-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.deleteFolder(folderId);
+        });
+
+        // 拖曳資料夾內的桌面進來
+        header.addEventListener('dragover', (e) => {
+            const data = e.dataTransfer.types.includes('text/plain');
+            if (data) {
+                e.preventDefault();
+                header.classList.add('drag-over');
+            }
+        });
+        header.addEventListener('dragleave', (e) => {
+            if (!header.contains(e.relatedTarget)) header.classList.remove('drag-over');
+        });
+        header.addEventListener('drop', (e) => {
+            e.preventDefault();
+            header.classList.remove('drag-over');
+            const transferData = e.dataTransfer.getData('text/plain');
+            if (transferData && transferData.startsWith('desktop:')) {
+                const draggedId = transferData.replace('desktop:', '');
+                this._moveDesktopToFolder(draggedId, folderId);
+            }
+        });
+
+        folderEl.appendChild(header);
+
+        const children = document.createElement('div');
+        children.className = `folder-children ${folder.collapsed ? 'collapsed' : ''}`;
+
+        for (const did of folder.desktopIds) {
+            const desktop = this.desktops[did];
+            if (!desktop) continue;
+            const desktopEl = this._createDesktopElement(did, desktop);
+            children.appendChild(desktopEl);
+        }
+
+        folderEl.appendChild(children);
+        return folderEl;
+    }
+
+    _createDesktopElement(id, desktop) {
+        const desktopElement = document.createElement('div');
+        desktopElement.className = `desktop-item ${id === this.currentDesktopId ? 'active' : ''}`;
+        desktopElement.draggable = true;
+        desktopElement.dataset.desktopId = id;
+        desktopElement.innerHTML = `
+            <div class="desktop-name">${desktop.name}</div>
+            <div class="desktop-actions">
+                <button class="desktop-action-btn rename-btn" title="重命名">✏️</button>
+                <button class="desktop-action-btn delete-btn" title="刪除">🗑️</button>
+            </div>
+        `;
+
+        this.setupDesktopDragEvents(desktopElement);
+
+        desktopElement.querySelector('.rename-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showRenameDesktopModal(id);
+        });
+
+        desktopElement.querySelector('.delete-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.deleteDesktop(id);
+        });
+
+        desktopElement.addEventListener('click', (e) => {
+            if (!e.target.closest('.desktop-actions')) {
+                this.switchDesktop(id);
+            }
+        });
+
+        return desktopElement;
+    }
+
+    _moveDesktopToFolder(desktopId, folderId) {
+        // 從舊資料夾移出
+        Object.keys(this.folders).forEach(fid => {
+            const idx = this.folders[fid].desktopIds.indexOf(desktopId);
+            if (idx > -1) this.folders[fid].desktopIds.splice(idx, 1);
+        });
+        // 從頂層移出
+        const rootIdx = this.desktopOrder.indexOf(desktopId);
+        if (rootIdx > -1) this.desktopOrder.splice(rootIdx, 1);
+
+        if (folderId && this.folders[folderId]) {
+            // 加入新資料夾
+            if (this.desktops[desktopId]) this.desktops[desktopId].folderId = folderId;
+            if (!this.folders[folderId].desktopIds.includes(desktopId)) {
+                this.folders[folderId].desktopIds.push(desktopId);
+            }
+        } else {
+            // 移到頂層
+            if (this.desktops[desktopId]) delete this.desktops[desktopId].folderId;
+            if (!this.desktopOrder.includes(desktopId)) {
+                this.desktopOrder.push(desktopId);
+            }
         }
     }
 
@@ -1207,27 +1456,47 @@ class WinDesk {
     }
 
     reorderDesktop(draggedDesktopId, dropTargetId) {
-        console.log('Reordering desktop:', draggedDesktopId, 'to position of:', dropTargetId);
-        
-        const draggedIndex = this.desktopOrder.indexOf(draggedDesktopId);
-        const dropTargetIndex = this.desktopOrder.indexOf(dropTargetId);
-        
-        if (draggedIndex === -1 || dropTargetIndex === -1) {
-            console.warn('Invalid desktop IDs for reordering');
-            return;
+        // 找出拖曳來源的資料夾（若有）
+        const getDraggedFolder = (id) => {
+            for (const [fid, folder] of Object.entries(this.folders)) {
+                if (folder.desktopIds.includes(id)) return fid;
+            }
+            return null;
+        };
+
+        const draggedFolderId = getDraggedFolder(draggedDesktopId);
+        const dropTargetFolderId = getDraggedFolder(dropTargetId);
+
+        // 如果同一個資料夾內排序
+        if (draggedFolderId && draggedFolderId === dropTargetFolderId) {
+            const arr = this.folders[draggedFolderId].desktopIds;
+            const di = arr.indexOf(draggedDesktopId);
+            const ti = arr.indexOf(dropTargetId);
+            arr.splice(di, 1);
+            arr.splice(arr.indexOf(dropTargetId), 0, draggedDesktopId);
+        } else if (!draggedFolderId && !dropTargetFolderId) {
+            // 都在頂層
+            const draggedIndex = this.desktopOrder.indexOf(draggedDesktopId);
+            const dropTargetIndex = this.desktopOrder.indexOf(dropTargetId);
+            if (draggedIndex === -1 || dropTargetIndex === -1) return;
+            this.desktopOrder.splice(draggedIndex, 1);
+            const newTargetIndex = this.desktopOrder.indexOf(dropTargetId);
+            this.desktopOrder.splice(newTargetIndex, 0, draggedDesktopId);
+        } else {
+            // 跨資料夾移動：移到目標桌面所在的資料夾（或頂層）
+            if (dropTargetFolderId) {
+                this._moveDesktopToFolder(draggedDesktopId, dropTargetFolderId);
+                // 調整順序
+                const arr = this.folders[dropTargetFolderId].desktopIds;
+                const di = arr.indexOf(draggedDesktopId);
+                arr.splice(di, 1);
+                arr.splice(arr.indexOf(dropTargetId), 0, draggedDesktopId);
+            } else {
+                // 移到頂層
+                this._moveDesktopToFolder(draggedDesktopId, null);
+            }
         }
-        
-        // 移除被拖拽的項目
-        this.desktopOrder.splice(draggedIndex, 1);
-        
-        // 重新計算目標位置（因為移除了一個項目，索引可能改變）
-        const newTargetIndex = this.desktopOrder.indexOf(dropTargetId);
-        
-        // 將被拖拽的項目插入到目標位置之前
-        this.desktopOrder.splice(newTargetIndex, 0, draggedDesktopId);
-        
-        console.log('New desktop order:', this.desktopOrder);
-        
+
         this.saveData();
         this.renderDesktops();
     }

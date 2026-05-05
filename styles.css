@@ -120,6 +120,12 @@ body {
     align-items: center;
 }
 
+.sidebar-header-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
 .sidebar-header h3 {
     font-size: 18px;
     font-weight: 600;
@@ -144,6 +150,132 @@ body {
     background: #45a049;
     transform: scale(1.1);
 }
+
+.add-folder-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 193, 7, 0.3);
+    border: 1px solid rgba(255, 193, 7, 0.5);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.add-folder-btn:hover {
+    background: rgba(255, 193, 7, 0.5);
+    transform: scale(1.1);
+}
+
+/* 資料夾樣式 */
+.folder-item {
+    margin: 5px 0;
+}
+
+.folder-header {
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid rgba(255, 193, 7, 0.2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 193, 7, 0.08);
+}
+
+.folder-header:hover {
+    background: rgba(255, 193, 7, 0.15);
+}
+
+.folder-toggle {
+    font-size: 10px;
+    transition: transform 0.2s;
+    color: rgba(255, 255, 255, 0.6);
+    flex-shrink: 0;
+}
+
+.folder-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.folder-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.folder-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folder-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.folder-header:hover .folder-actions {
+    opacity: 1;
+}
+
+.folder-action-btn {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.folder-action-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.folder-children {
+    margin-left: 12px;
+    border-left: 2px solid rgba(255, 193, 7, 0.2);
+    padding-left: 6px;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.folder-children.collapsed {
+    display: none;
+}
+
+/* 資料夾內的桌面縮排樣式 */
+.folder-children .desktop-item {
+    padding: 9px 12px;
+    font-size: 13px;
+}
+
+.folder-header.drag-over {
+    background: rgba(255, 193, 7, 0.3);
+    border: 2px dashed rgba(255, 193, 7, 0.8);
+}
+
+/* 頂層桌面（無資料夾） */
+.desktop-item.root-level {
+    /* no extra styling needed */
+}
+
 
 .desktop-list {
     flex: 1;

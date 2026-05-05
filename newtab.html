@@ -23,7 +23,10 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <h3>桌面管理</h3>
-                <button class="add-desktop-btn" title="新增桌面">+</button>
+                <div class="sidebar-header-actions">
+                    <button class="add-folder-btn" title="新增資料夾">📁</button>
+                    <button class="add-desktop-btn" title="新增桌面">+</button>
+                </div>
             </div>
             
             <div class="desktop-list" id="desktopList">
@@ -119,6 +122,26 @@
             <div class="modal-footer">
                 <button class="btn-secondary" id="cancelBackground">取消</button>
                 <button class="btn-primary" id="confirmBackground">確認更換</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 資料夾重命名對話框 -->
+    <div class="modal" id="renameFolderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>重命名資料夾</h3>
+                <button class="modal-close" id="closeRenameFolderModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="folderName">資料夾名稱：</label>
+                    <input type="text" id="folderName" placeholder="輸入資料夾名稱">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelRenameFolder">取消</button>
+                <button class="btn-primary" id="confirmRenameFolder">確認</button>
             </div>
         </div>
     </div>
