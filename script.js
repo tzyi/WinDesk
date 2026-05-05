@@ -815,30 +815,99 @@ class WinDesk {
             }
         }
 
-        // sidebar 空白處接受 drop：拖到資料夾外即移到頂層
-        const sidebar = document.querySelector('.sidebar');
-        sidebar.addEventListener('dragover', (e) => {
+        // 統一在 desktopList 層處理所有拖曳
+        desktopList.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            const draggingEl = desktopList.querySelector('.dragging');
+            if (!draggingEl) return;
+
+            // 若拖曳的是桌面，且滑鼠在 folder-header 上 → 顯示「移入資料夾」
+            const onFolderHeader = e.target.closest('.folder-header');
+            if (draggingEl.dataset.desktopId && onFolderHeader) {
+                this._clearInsertLine();
+                document.querySelectorAll('.folder-header.drag-over').forEach(el => el.classList.remove('drag-over'));
+                onFolderHeader.classList.add('drag-over');
+                return;
+            }
+            document.querySelectorAll('.folder-header.drag-over').forEach(el => el.classList.remove('drag-over'));
+
+            // 滑鼠在資料夾內的子桌面上 → 資料夾內排序
+            const inFolderDesktop = e.target.closest('.folder-children .desktop-item');
+            if (inFolderDesktop && inFolderDesktop !== draggingEl) {
+                const pos = this._getDropPosition(e, inFolderDesktop);
+                this._showInsertLine(inFolderDesktop, pos);
+                return;
+            }
+
+            // 頂層排序：folder-item 或 root-level desktop-item
+            const topTarget = e.target.closest('.folder-item, .desktop-item.root-level');
+            if (!topTarget || topTarget === draggingEl || topTarget.closest('.folder-children')) {
+                // 不清除插入線，保持最後一個位置
+                return;
+            }
+
+            const pos = this._getDropPosition(e, topTarget);
+            this._showInsertLine(topTarget, pos);
         });
-        sidebar.addEventListener('drop', (e) => {
-            // 若 drop 目標是資料夾或桌面項目則不處理（由各自的 drop 處理）
-            if (e.target.closest('.folder-header') || e.target.closest('.desktop-item')) return;
+
+        desktopList.addEventListener('dragleave', (e) => {
+            if (!desktopList.contains(e.relatedTarget)) {
+                this._clearInsertLine();
+                document.querySelectorAll('.folder-header.drag-over').forEach(el => el.classList.remove('drag-over'));
+            }
+        });
+
+        desktopList.addEventListener('drop', (e) => {
             e.preventDefault();
             const transferData = e.dataTransfer.getData('text/plain');
-            if (transferData && transferData.startsWith('desktop:')) {
+            if (!transferData) return;
+
+            const onFolderHeader = e.target.closest('.folder-header');
+            document.querySelectorAll('.folder-header.drag-over').forEach(el => el.classList.remove('drag-over'));
+
+            // 拖曳桌面到資料夾 header → 移入資料夾
+            if (onFolderHeader && transferData.startsWith('desktop:')) {
+                this._clearInsertLine();
+                const folderId = onFolderHeader.closest('.folder-item').dataset.folderId;
                 const draggedId = transferData.replace('desktop:', '');
-                const inFolder = Object.values(this.folders).some(f => f.desktopIds.includes(draggedId));
-                if (inFolder) {
-                    this._moveDesktopToFolder(draggedId, null);
-                    // 確保 topLevelOrder 也加入此桌面
-                    if (!this.topLevelOrder) this.topLevelOrder = [];
-                    if (!this.topLevelOrder.find(x => x.type === 'desktop' && x.id === draggedId)) {
-                        this.topLevelOrder.push({ type: 'desktop', id: draggedId });
-                    }
-                    this.folderOrder = this.topLevelOrder.filter(x => x.type === 'folder').map(x => x.id);
-                    this.desktopOrder = this.topLevelOrder.filter(x => x.type === 'desktop').map(x => x.id);
-                    this.saveData();
-                    this.renderDesktops();
+                this._moveDesktopToFolder(draggedId, folderId);
+                return;
+            }
+
+            // 先讀取插入線位置，再移除
+            const insertLine = desktopList.querySelector('.drag-insert-line');
+            if (!insertLine) return;
+
+            const nextEl = insertLine.nextElementSibling;
+            const prevEl = insertLine.previousElementSibling;
+            this._clearInsertLine();
+
+            // 移除插入線（已讀完位置）
+            // nextEl 或 prevEl 就是插入目標
+            const refEl = nextEl || prevEl;
+            const insertBefore = !!nextEl; // true = 插到 refEl 前面
+
+            if (!refEl) return;
+
+            const refFolderId = refEl.dataset.folderId;
+            const refDesktopId = refEl.dataset.desktopId;
+
+            if (transferData.startsWith('desktop:')) {
+                const draggedId = transferData.replace('desktop:', '');
+                if (refDesktopId) {
+                    this.reorderDesktop(draggedId, refDesktopId, insertBefore ? 'before' : 'after');
+                } else if (refFolderId) {
+                    // 插到資料夾旁邊 → 移到頂層，排在資料夾前後
+                    this.reorderFolderOrDesktop(draggedId, 'desktop', refFolderId, 'folder', insertBefore ? 'before' : 'after');
+                }
+            } else if (transferData.startsWith('folder:')) {
+                const draggedFolderId = transferData.replace('folder:', '');
+                if (refFolderId && draggedFolderId !== refFolderId) {
+                    this.reorderFolderOrDesktop(draggedFolderId, 'folder', refFolderId, 'folder', insertBefore ? 'before' : 'after');
+                } else if (refDesktopId) {
+                    this.reorderFolderOrDesktop(draggedFolderId, 'folder', refDesktopId, 'desktop', insertBefore ? 'before' : 'after');
                 }
             }
         });
@@ -901,36 +970,10 @@ class WinDesk {
             folderEl.classList.add('dragging');
         });
         folderEl.addEventListener('dragend', (e) => {
-            // 只在真正是資料夾拖曳時移除樣式
             if (!e.target.closest('.desktop-item')) {
                 folderEl.classList.remove('dragging');
             }
-        });
-
-        // 拖曳桌面或資料夾進來
-        header.addEventListener('dragover', (e) => {
-            const data = e.dataTransfer.types.includes('text/plain');
-            if (data) {
-                e.preventDefault();
-                header.classList.add('drag-over');
-            }
-        });
-        header.addEventListener('dragleave', (e) => {
-            if (!header.contains(e.relatedTarget)) header.classList.remove('drag-over');
-        });
-        header.addEventListener('drop', (e) => {
-            e.preventDefault();
-            header.classList.remove('drag-over');
-            const transferData = e.dataTransfer.getData('text/plain');
-            if (transferData && transferData.startsWith('desktop:')) {
-                const draggedId = transferData.replace('desktop:', '');
-                this._moveDesktopToFolder(draggedId, folderId);
-            } else if (transferData && transferData.startsWith('folder:')) {
-                const draggedFolderId = transferData.replace('folder:', '');
-                if (draggedFolderId !== folderId) {
-                    this.reorderFolderOrDesktop(draggedFolderId, 'folder', folderId, 'folder');
-                }
-            }
+            this._clearInsertLine();
         });
 
         folderEl.appendChild(header);
@@ -1463,6 +1506,28 @@ class WinDesk {
         return 0;
     }
 
+    // 拖曳插入線 helper
+    _getDropPosition(e, element) {
+        const rect = element.getBoundingClientRect();
+        return e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    }
+
+    _clearInsertLine() {
+        const line = document.querySelector('.drag-insert-line');
+        if (line) line.remove();
+    }
+
+    _showInsertLine(referenceEl, position) {
+        this._clearInsertLine();
+        const line = document.createElement('div');
+        line.className = 'drag-insert-line';
+        if (position === 'before') {
+            referenceEl.parentNode.insertBefore(line, referenceEl);
+        } else {
+            referenceEl.parentNode.insertBefore(line, referenceEl.nextSibling);
+        }
+    }
+
     // 桌面拖拽功能
     setupDesktopDragEvents(desktopElement) {
         const desktopId = desktopElement.dataset.desktopId;
@@ -1486,44 +1551,11 @@ class WinDesk {
         desktopElement.addEventListener('dragend', (e) => {
             console.log('Desktop drag end');
             desktopElement.classList.remove('dragging');
-        });
-
-        desktopElement.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            
-            const dragData = e.dataTransfer.types.includes('text/plain');
-            if (dragData) {
-                desktopElement.classList.add('drag-over');
-            }
-        });
-
-        desktopElement.addEventListener('dragleave', (e) => {
-            // 只有當離開的是desktop本身而不是子元素時才移除樣式
-            if (!desktopElement.contains(e.relatedTarget)) {
-                desktopElement.classList.remove('drag-over');
-            }
-        });
-
-        desktopElement.addEventListener('drop', (e) => {
-            e.preventDefault();
-            desktopElement.classList.remove('drag-over');
-
-            const transferData = e.dataTransfer.getData('text/plain');
-            const dropTargetId = desktopElement.dataset.desktopId;
-            if (transferData && transferData.startsWith('desktop:')) {
-                const draggedDesktopId = transferData.replace('desktop:', '');
-                if (draggedDesktopId !== dropTargetId) {
-                    this.reorderDesktop(draggedDesktopId, dropTargetId);
-                }
-            } else if (transferData && transferData.startsWith('folder:')) {
-                const draggedFolderId = transferData.replace('folder:', '');
-                this.reorderFolderOrDesktop(draggedFolderId, 'folder', dropTargetId, 'desktop');
-            }
+            this._clearInsertLine();
         });
     }
 
-    reorderDesktop(draggedDesktopId, dropTargetId) {
+    reorderDesktop(draggedDesktopId, dropTargetId, dropPos = 'before') {
         // 找出拖曳來源的資料夾（若有）
         const getDraggedFolder = (id) => {
             for (const [fid, folder] of Object.entries(this.folders)) {
@@ -1535,36 +1567,38 @@ class WinDesk {
         const draggedFolderId = getDraggedFolder(draggedDesktopId);
         const dropTargetFolderId = getDraggedFolder(dropTargetId);
 
+        const insertInArray = (arr, draggedId, targetId, pos) => {
+            const di = arr.indexOf(draggedId);
+            arr.splice(di, 1);
+            let ti = arr.indexOf(targetId);
+            if (pos === 'after') ti += 1;
+            arr.splice(ti, 0, draggedId);
+        };
+
         // 如果同一個資料夾內排序
         if (draggedFolderId && draggedFolderId === dropTargetFolderId) {
             const arr = this.folders[draggedFolderId].desktopIds;
-            const di = arr.indexOf(draggedDesktopId);
-            const ti = arr.indexOf(dropTargetId);
-            arr.splice(di, 1);
-            arr.splice(arr.indexOf(dropTargetId), 0, draggedDesktopId);
+            insertInArray(arr, draggedDesktopId, dropTargetId, dropPos);
         } else if (!draggedFolderId && !dropTargetFolderId) {
             // 都在頂層
-            this.reorderFolderOrDesktop(draggedDesktopId, 'desktop', dropTargetId, 'desktop');
+            this.reorderFolderOrDesktop(draggedDesktopId, 'desktop', dropTargetId, 'desktop', dropPos);
             return;
         } else {
             // 跨資料夾移動：移到目標桌面所在的資料夾（或頂層）
             if (dropTargetFolderId) {
                 this._moveDesktopToFolder(draggedDesktopId, dropTargetFolderId);
-                // 調整順序
                 const arr = this.folders[dropTargetFolderId].desktopIds;
-                const di = arr.indexOf(draggedDesktopId);
-                arr.splice(di, 1);
-                arr.splice(arr.indexOf(dropTargetId), 0, draggedDesktopId);
+                insertInArray(arr, draggedDesktopId, dropTargetId, dropPos);
             } else {
                 // 移到頂層，並排在目標桌面旁邊
                 this._moveDesktopToFolder(draggedDesktopId, null);
-                // 更新 topLevelOrder，將拖曳的桌面插入目標桌面前
                 if (!this.topLevelOrder) this.topLevelOrder = [];
                 const draggedEntry = { type: 'desktop', id: draggedDesktopId };
                 const existingIdx = this.topLevelOrder.findIndex(x => x.type === 'desktop' && x.id === draggedDesktopId);
                 if (existingIdx > -1) this.topLevelOrder.splice(existingIdx, 1);
-                const targetIdx = this.topLevelOrder.findIndex(x => x.type === 'desktop' && x.id === dropTargetId);
+                let targetIdx = this.topLevelOrder.findIndex(x => x.type === 'desktop' && x.id === dropTargetId);
                 if (targetIdx > -1) {
+                    if (dropPos === 'after') targetIdx += 1;
                     this.topLevelOrder.splice(targetIdx, 0, draggedEntry);
                 } else {
                     this.topLevelOrder.push(draggedEntry);
@@ -1579,14 +1613,15 @@ class WinDesk {
     }
 
     // 重排資料夾或桌面在頂層列表中的位置
-    reorderFolderOrDesktop(draggedId, draggedType, targetId, targetType) {
+    reorderFolderOrDesktop(draggedId, draggedType, targetId, targetType, dropPos = 'before') {
         const topOrder = this.topLevelOrder ? [...this.topLevelOrder] : [];
         const draggedIdx = topOrder.findIndex(x => x.type === draggedType && x.id === draggedId);
         const targetIdx = topOrder.findIndex(x => x.type === targetType && x.id === targetId);
         if (draggedIdx === -1 || targetIdx === -1) return;
 
         const [removed] = topOrder.splice(draggedIdx, 1);
-        const newTargetIdx = topOrder.findIndex(x => x.type === targetType && x.id === targetId);
+        let newTargetIdx = topOrder.findIndex(x => x.type === targetType && x.id === targetId);
+        if (dropPos === 'after') newTargetIdx += 1;
         topOrder.splice(newTargetIdx, 0, removed);
 
         this.topLevelOrder = topOrder;

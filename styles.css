@@ -278,6 +278,28 @@ body {
     border: 2px dashed rgba(255, 193, 7, 0.8);
 }
 
+/* 拖曳插入位置指示線（真實 DOM 元素） */
+.drag-insert-line {
+    height: 2px;
+    background: #677eea;
+    border-radius: 2px;
+    margin: 0 8px;
+    box-shadow: 0 0 6px rgba(103, 126, 234, 0.8);
+    pointer-events: none;
+    position: relative;
+}
+.drag-insert-line::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #677eea;
+    box-shadow: 0 0 6px rgba(103, 126, 234, 0.8);
+}
+
 /* 頂層桌面（無資料夾） */
 .desktop-item.root-level {
     /* no extra styling needed */
@@ -317,11 +339,6 @@ body {
     cursor: grabbing;
 }
 
-.desktop-item.drag-over {
-    background: rgba(103, 126, 234, 0.2);
-    border: 2px dashed rgba(103, 126, 234, 0.8);
-    transform: translateY(-2px);
-}
 
 .desktop-item {
     cursor: grab;
