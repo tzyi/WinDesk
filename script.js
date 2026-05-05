@@ -1734,8 +1734,12 @@ class WinDesk {
         const data = {
             desktops: this.desktops,
             currentDesktopId: this.currentDesktopId,
+            folders: this.folders,
+            folderOrder: this.folderOrder,
+            topLevelOrder: this.topLevelOrder,
+            desktopOrder: this.desktopOrder,
             exportDate: new Date().toISOString(),
-            version: '1.0'
+            version: '2.0'
         };
 
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1766,13 +1770,16 @@ class WinDesk {
                     if (confirm('確定要匯入這個設定嗎？這將會覆蓋當前的所有桌面設定。')) {
                         this.desktops = data.desktops;
                         this.currentDesktopId = data.currentDesktopId || Object.keys(data.desktops)[0];
+                        this.folders = data.folders || {};
+                        this.folderOrder = data.folderOrder || [];
+                        this.topLevelOrder = data.topLevelOrder || [];
                         this.desktopOrder = data.desktopOrder || Object.keys(data.desktops);
-                        
+
                         // 確保當前桌面存在
                         if (!this.desktops[this.currentDesktopId]) {
                             this.currentDesktopId = Object.keys(this.desktops)[0];
                         }
-                        
+
                         this.saveData();
                         this.renderDesktops();
                         this.renderCurrentDesktop();
