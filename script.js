@@ -1,4 +1,8 @@
 // WinDesk - Chrome Extension JavaScript
+const GRID_COLUMNS = 22;
+const GRID_ROWS = 12;
+const GRID_CELLS = GRID_COLUMNS * GRID_ROWS;
+
 class WinDesk {
     constructor() {
         this.currentDesktopId = 'default';
@@ -56,11 +60,13 @@ class WinDesk {
     // 數據管理
     async loadData() {
         let dataLoaded = false;
+        let storedGridColumns = 20;
 
         try {
             // 優先從本地儲存載入（更可靠）
             const localData = await chrome.storage.local.get(['windesk_data']);
             if (localData.windesk_data && localData.windesk_data.desktops) {
+                storedGridColumns = localData.windesk_data.gridColumns || 20;
                 this.desktops = localData.windesk_data.desktops;
                 this.currentDesktopId = localData.windesk_data.currentDesktopId || 'default';
                 this.desktopOrder = localData.windesk_data.desktopOrder || Object.keys(this.desktops);
@@ -83,6 +89,7 @@ class WinDesk {
             try {
                 const syncData = await chrome.storage.sync.get(['windesk_data']);
                 if (syncData.windesk_data && syncData.windesk_data.desktops) {
+                    storedGridColumns = syncData.windesk_data.gridColumns || 20;
                     this.desktops = syncData.windesk_data.desktops;
                     this.currentDesktopId = syncData.windesk_data.currentDesktopId || 'default';
                     this.desktopOrder = syncData.windesk_data.desktopOrder || Object.keys(this.desktops);
@@ -146,6 +153,7 @@ class WinDesk {
         }
 
         // 立即保存修復後的數據
+        this.migrateGridPositions(this.desktops, storedGridColumns);
         Object.values(this.desktops).forEach(desktop => {
             if (!Array.isArray(desktop.pages) || desktop.pages.length === 0) {
                 desktop.pages = [{ websites: Array.isArray(desktop.websites) ? desktop.websites : [] }];
@@ -163,6 +171,24 @@ class WinDesk {
         await this.saveData();
     }
 
+    migrateGridPositions(desktops, sourceColumns) {
+        if (sourceColumns === GRID_COLUMNS) return;
+        const migrated = new WeakSet();
+        Object.values(desktops).forEach(desktop => {
+            const lists = [desktop.websites, ...(desktop.pages || []).map(page => page.websites)];
+            lists.forEach(websites => {
+                if (!Array.isArray(websites)) return;
+                websites.forEach(website => {
+                    if (migrated.has(website) || !Number.isInteger(website.gridPosition)) return;
+                    const row = Math.floor(website.gridPosition / sourceColumns);
+                    const col = website.gridPosition % sourceColumns;
+                    website.gridPosition = row * GRID_COLUMNS + col;
+                    migrated.add(website);
+                });
+            });
+        });
+    }
+
     async saveData() {
         try {
             // 驗證數據完整性
@@ -173,6 +199,7 @@ class WinDesk {
 
             const dataToSave = {
                 desktops: this.desktops,
+                gridColumns: GRID_COLUMNS,
                 currentDesktopId: this.currentDesktopId,
                 desktopOrder: this.desktopOrder,
                 folders: this.folders,
@@ -204,6 +231,7 @@ class WinDesk {
             try {
                 const dataToSave = {
                     desktops: this.desktops,
+                    gridColumns: GRID_COLUMNS,
                     currentDesktopId: this.currentDesktopId,
                     desktopOrder: this.desktopOrder,
                     folders: this.folders,
@@ -235,6 +263,7 @@ class WinDesk {
 
             const dataToSave = {
                 desktops: this.desktops,
+                gridColumns: GRID_COLUMNS,
                 currentDesktopId: this.currentDesktopId,
                 desktopOrder: this.desktopOrder,
                 folders: this.folders,
@@ -594,13 +623,13 @@ class WinDesk {
             .map(website => ({ ...website, gridPosition: website.gridPosition || 0 }));
         if (!items.length) return;
 
-        const minRow = Math.min(...items.map(item => Math.floor(item.gridPosition / 20)));
-        const minCol = Math.min(...items.map(item => item.gridPosition % 20));
+        const minRow = Math.min(...items.map(item => Math.floor(item.gridPosition / GRID_COLUMNS)));
+        const minCol = Math.min(...items.map(item => item.gridPosition % GRID_COLUMNS));
         this.copyClipboard = {
             items: items.map(item => ({
                 ...item,
-                rowOffset: Math.floor(item.gridPosition / 20) - minRow,
-                colOffset: (item.gridPosition % 20) - minCol
+                rowOffset: Math.floor(item.gridPosition / GRID_COLUMNS) - minRow,
+                colOffset: (item.gridPosition % GRID_COLUMNS) - minCol
             }))
         };
     }
@@ -617,12 +646,12 @@ class WinDesk {
         const maxColOffset = Math.max(...pasteItems.map(item => item.colOffset));
         let basePosition = -1;
 
-        for (let base = 0; base < 180; base++) {
-            const baseRow = Math.floor(base / 20);
-            const baseCol = base % 20;
-            if (baseRow + maxRowOffset >= 9 || baseCol + maxColOffset >= 20) continue;
+        for (let base = 0; base < GRID_CELLS; base++) {
+            const baseRow = Math.floor(base / GRID_COLUMNS);
+            const baseCol = base % GRID_COLUMNS;
+            if (baseRow + maxRowOffset >= GRID_ROWS || baseCol + maxColOffset >= GRID_COLUMNS) continue;
             const fits = pasteItems.every(item =>
-                !usedPositions.has((baseRow + item.rowOffset) * 20 + baseCol + item.colOffset)
+                !usedPositions.has((baseRow + item.rowOffset) * GRID_COLUMNS + baseCol + item.colOffset)
             );
             if (fits) {
                 basePosition = base;
@@ -635,15 +664,15 @@ class WinDesk {
             return;
         }
 
-        const baseRow = Math.floor(basePosition / 20);
-        const baseCol = basePosition % 20;
+        const baseRow = Math.floor(basePosition / GRID_COLUMNS);
+        const baseCol = basePosition % GRID_COLUMNS;
         pasteItems.forEach((item, index) => {
             targetWebsites.push({
                 name: item.name,
                 url: item.url,
                 icon: item.icon,
                 id: `website_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-                gridPosition: (baseRow + item.rowOffset) * 20 + baseCol + item.colOffset
+                gridPosition: (baseRow + item.rowOffset) * GRID_COLUMNS + baseCol + item.colOffset
             });
         });
         this.saveData();
@@ -1370,11 +1399,11 @@ class WinDesk {
             return;
         }
 
-        // 建立20x9的網格
+        // 建立22x12的網格
         desktopContent.innerHTML = '';
 
-        // 創建180個網格單元格 (20 columns x 9 rows)
-        for (let i = 0; i < 180; i++) {
+        // 建立264個網格單元格 (22 columns x 12 rows)
+        for (let i = 0; i < GRID_CELLS; i++) {
             const gridCell = document.createElement('div');
             gridCell.className = 'grid-cell';
             gridCell.dataset.gridIndex = i;
@@ -1574,10 +1603,10 @@ class WinDesk {
         // 計算相對偏移量
         const relativeOffsets = websites.map(website => {
             const currentPos = website.gridPosition || 0;
-            const row = Math.floor(currentPos / 20);
-            const col = currentPos % 20;
-            const minRow = Math.floor(minPosition / 20);
-            const minCol = minPosition % 20;
+            const row = Math.floor(currentPos / GRID_COLUMNS);
+            const col = currentPos % GRID_COLUMNS;
+            const minRow = Math.floor(minPosition / GRID_COLUMNS);
+            const minCol = minPosition % GRID_COLUMNS;
 
             return {
                 website: website,
@@ -1588,8 +1617,8 @@ class WinDesk {
         });
 
         // 計算新的基準位置
-        const newBaseRow = Math.floor(dropGridIndex / 20);
-        const newBaseCol = dropGridIndex % 20;
+        const newBaseRow = Math.floor(dropGridIndex / GRID_COLUMNS);
+        const newBaseCol = dropGridIndex % GRID_COLUMNS;
 
         // 暫時記錄需要移動的圖示的原始位置
         const originalPositions = new Map();
@@ -1604,10 +1633,10 @@ class WinDesk {
         relativeOffsets.forEach(({ website, rowOffset, colOffset }) => {
             const newRow = newBaseRow + rowOffset;
             const newCol = newBaseCol + colOffset;
-            const newPosition = newRow * 20 + newCol;
+            const newPosition = newRow * GRID_COLUMNS + newCol;
 
             // 檢查新位置是否在邊界內
-            if (newRow >= 0 && newRow < 9 && newCol >= 0 && newCol < 20) {
+            if (newRow >= 0 && newRow < GRID_ROWS && newCol >= 0 && newCol < GRID_COLUMNS) {
                 // 檢查目標位置是否被其他圖示佔用（不包括正在移動的圖示）
                 const existingWebsite = this.getCurrentWebsites().find(w =>
                     w.gridPosition === newPosition && !websiteIds.includes(w.id)
@@ -1632,7 +1661,7 @@ class WinDesk {
             .map(website => website.gridPosition ?? 0));
         const displacedPositions = new Map();
         for (const website of conflictedWebsites) {
-            const emptyPosition = Array.from({ length: 180 }, (_, i) => i)
+            const emptyPosition = Array.from({ length: GRID_CELLS }, (_, i) => i)
                 .find(i => !reservedPositions.has(i) && !occupiedPositions.has(i));
             if (emptyPosition === undefined) return;
             displacedPositions.set(website.id, emptyPosition);
@@ -1667,7 +1696,7 @@ class WinDesk {
         let currentIndex = startIndex;
         let found = 0;
 
-        while (found < count && currentIndex < 180) {
+        while (found < count && currentIndex < GRID_CELLS) {
             if (!usedPositions.has(currentIndex)) {
                 positions.push(currentIndex);
                 found++;
@@ -1682,7 +1711,7 @@ class WinDesk {
         // 如果找不到足夠的連續位置，就分散放置
         if (positions.length < count) {
             positions.length = 0;
-            for (let i = 0; i < 180 && positions.length < count; i++) {
+            for (let i = 0; i < GRID_CELLS && positions.length < count; i++) {
                 if (!usedPositions.has(i)) {
                     positions.push(i);
                 }
@@ -1696,7 +1725,7 @@ class WinDesk {
         const currentDesktop = this.desktops[this.currentDesktopId];
         const usedPositions = this.getCurrentWebsites().map(w => w.gridPosition || 0);
 
-        for (let i = 0; i < 180; i++) {
+        for (let i = 0; i < GRID_CELLS; i++) {
             if (!usedPositions.includes(i)) {
                 return i;
             }
@@ -1711,7 +1740,7 @@ class WinDesk {
         // 合併已使用位置和需要排除的位置
         const allExcluded = new Set([...usedPositions, ...excludePositions]);
 
-        for (let i = 0; i < 180; i++) {
+        for (let i = 0; i < GRID_CELLS; i++) {
             if (!allExcluded.has(i)) {
                 return i;
             }
@@ -2265,6 +2294,7 @@ class WinDesk {
     exportData() {
         const data = {
             desktops: this.desktops,
+            gridColumns: GRID_COLUMNS,
             currentDesktopId: this.currentDesktopId,
             folders: this.folders,
             folderOrder: this.folderOrder,
@@ -2303,6 +2333,7 @@ class WinDesk {
 
                 if (data.desktops && typeof data.desktops === 'object') {
                     if (confirm('確定要匯入這個設定嗎？這將會覆蓋當前的所有桌面設定。')) {
+                        this.migrateGridPositions(data.desktops, data.gridColumns || 20);
                         this.desktops = data.desktops;
                         this.currentDesktopId = data.currentDesktopId || Object.keys(data.desktops)[0];
                         this.folders = data.folders || {};
