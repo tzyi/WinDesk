@@ -382,6 +382,11 @@ class WinDesk {
             this.hideIconContextMenu();
         });
 
+        document.getElementById('deleteSelectedWebsitesBtn').addEventListener('click', () => {
+            this.deleteSelectedWebsites();
+            this.hideIconContextMenu();
+        });
+
         // 編輯網站模態事件
         document.getElementById('closeEditModal').addEventListener('click', () => {
             this.hideModal('editWebsiteModal');
@@ -1298,6 +1303,20 @@ class WinDesk {
         }
     }
 
+    deleteSelectedWebsites() {
+        const selectedIds = new Set(this.selectedIcons);
+        const websites = this.getCurrentWebsites();
+        const selectedCount = websites.filter(website => selectedIds.has(website.id)).length;
+        if (!selectedCount) return;
+
+        if (!confirm(`確定要刪除所選取的 ${selectedCount} 個圖示嗎？`)) return;
+
+        const remainingWebsites = websites.filter(website => !selectedIds.has(website.id));
+        websites.splice(0, websites.length, ...remainingWebsites);
+        this.saveData();
+        this.renderCurrentDesktop();
+    }
+
     renderCurrentDesktop() {
         const desktopContent = document.getElementById('desktopContent');
 
@@ -1868,6 +1887,9 @@ class WinDesk {
 
     showIconContextMenu(x, y) {
         const iconContextMenu = document.getElementById('iconContextMenu');
+        const hasMultipleSelection = this.selectedIcons.size > 1;
+        document.getElementById('deleteWebsiteBtn').style.display = hasMultipleSelection ? 'none' : '';
+        document.getElementById('deleteSelectedWebsitesBtn').style.display = hasMultipleSelection ? '' : 'flex';
         iconContextMenu.style.display = 'block';
         iconContextMenu.style.left = Math.min(x, window.innerWidth - iconContextMenu.offsetWidth) + 'px';
         iconContextMenu.style.top = Math.min(y, window.innerHeight - iconContextMenu.offsetHeight) + 'px';
