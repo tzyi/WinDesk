@@ -1625,11 +1625,22 @@ class WinDesk {
         });
 
         // 將被衝突的圖示移動到空位
-        const reservedPositions = new Set(Array.from(newPositions.values()));
-        conflictedWebsites.forEach(website => {
-            const emptyPosition = this.findNextAvailableGridExcluding(reservedPositions);
-            website.gridPosition = emptyPosition;
+        // Plan every position before changing data. Moving icons free their old cells.
+        const reservedPositions = new Set(newPositions.values());
+        const occupiedPositions = new Set(this.getCurrentWebsites()
+            .filter(website => !websiteIds.includes(website.id) && !conflictedWebsites.includes(website))
+            .map(website => website.gridPosition ?? 0));
+        const displacedPositions = new Map();
+        for (const website of conflictedWebsites) {
+            const emptyPosition = Array.from({ length: 180 }, (_, i) => i)
+                .find(i => !reservedPositions.has(i) && !occupiedPositions.has(i));
+            if (emptyPosition === undefined) return;
+            displacedPositions.set(website.id, emptyPosition);
             reservedPositions.add(emptyPosition);
+        }
+
+        conflictedWebsites.forEach(website => {
+            website.gridPosition = displacedPositions.get(website.id);
         });
 
         // 應用新位置
