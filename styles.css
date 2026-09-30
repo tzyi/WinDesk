@@ -48,8 +48,13 @@ body {
 .note-folder-name { flex: 1; min-width: 0; border: 0; background: transparent; text-align: left; padding: 8px 2px; font: inherit; font-weight: 600; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-folder-action { flex-shrink: 0; border: 0; background: transparent; color: #555; padding: 5px; cursor: pointer; }
 .note-folder-action:hover { color: #232323; background: #dce1fa; border-radius: 4px; }
-.note-list-item { flex: 1; min-width: 0; margin-left: 22px; border: 0; background: transparent; text-align: left; padding: 10px; border-radius: 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-list-item { flex: 1; min-width: 0; margin-left: 22px; border: 0; background: transparent; text-align: left; padding: 10px; font: inherit; border-radius: 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-item-row:hover { background: #e4e8ff; }
+.note-folder-row[draggable], .note-item-row[draggable] { cursor: grab; }
+.note-folder-row.dragging, .note-item-row.dragging { opacity: 0.45; }
+.notes-list .drop-before { box-shadow: inset 0 3px #667eea; }
+.notes-list .drop-after { box-shadow: inset 0 -3px #667eea; }
+.notes-list .drop-into { background: #d7ddff; }
 .notes-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 18px; }
 .notes-editor input, .notes-editor textarea { width: 100%; border: 1px solid #d5d5d5; border-radius: 6px; padding: 10px; font: inherit; }
 .notes-editor input { font-size: 20px; font-weight: 600; }

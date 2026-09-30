@@ -2015,6 +2015,65 @@ class WinDesk {
             this.saveData();
         });
         document.getElementById('addNoteFolderBtn').addEventListener('click', () => this.addNoteFolder());
+        const notesList = document.getElementById('notesList');
+        notesList.addEventListener('dragstart', (event) => {
+            const row = event.target.closest('[data-drag-type]');
+            if (!row || event.target.closest('.note-folder-action')) return;
+            event.dataTransfer.setData('text/plain', `${row.dataset.dragType}:${row.dataset.dragId}`);
+            event.dataTransfer.effectAllowed = 'move';
+            row.classList.add('dragging');
+        });
+        notesList.addEventListener('dragend', () => {
+            notesList.querySelectorAll('.dragging, .drop-before, .drop-after, .drop-into').forEach(row =>
+                row.classList.remove('dragging', 'drop-before', 'drop-after', 'drop-into'));
+        });
+        notesList.addEventListener('dragover', (event) => {
+            const target = event.target.closest('[data-drag-type], [data-unfiled]');
+            const source = notesList.querySelector('.dragging');
+            notesList.querySelectorAll('.drop-before, .drop-after, .drop-into').forEach(row =>
+                row.classList.remove('drop-before', 'drop-after', 'drop-into'));
+            if (!target || !source || target === source) return;
+            const sourceType = source.dataset.dragType;
+            if (sourceType === 'folder' && target.dataset.dragType !== 'folder') return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            const into = sourceType === 'note' && target.dataset.dragType !== 'note';
+            target.classList.add(into ? 'drop-into' : event.clientY < target.getBoundingClientRect().top + target.offsetHeight / 2 ? 'drop-before' : 'drop-after');
+        });
+        notesList.addEventListener('drop', (event) => {
+            const target = event.target.closest('[data-drag-type], [data-unfiled]');
+            const source = notesList.querySelector('.dragging');
+            if (!target || !source || target === source) return;
+            const type = source.dataset.dragType;
+            if (type === 'folder' && target.dataset.dragType !== 'folder') return;
+            event.preventDefault();
+            const sourceId = source.dataset.dragId;
+            if (type === 'folder') {
+                const from = this.noteFolders.findIndex(folder => folder.id === sourceId);
+                const [folder] = this.noteFolders.splice(from, 1);
+                const index = this.noteFolders.findIndex(item => item.id === target.dataset.dragId);
+                this.noteFolders.splice(index + (event.clientY >= target.getBoundingClientRect().top + target.offsetHeight / 2 ? 1 : 0), 0, folder);
+            } else {
+                const from = this.notes.findIndex(note => note.id === sourceId);
+                const [note] = this.notes.splice(from, 1);
+                if (target.dataset.dragType === 'note') {
+                    const targetNote = this.notes.find(item => item.id === target.dataset.dragId);
+                    note.folderId = targetNote.folderId || null;
+                    const index = this.notes.indexOf(targetNote);
+                    this.notes.splice(index + (event.clientY >= target.getBoundingClientRect().top + target.offsetHeight / 2 ? 1 : 0), 0, note);
+                } else {
+                    note.folderId = target.dataset.dragId || null;
+                    const folder = this.noteFolders.find(item => item.id === note.folderId);
+                    if (folder) folder.collapsed = false;
+                    else this.unfiledNotesCollapsed = false;
+                    const last = this.notes.findLastIndex(item => (item.folderId || null) === note.folderId);
+                    this.notes.splice(last + 1, 0, note);
+                }
+                if (this.activeNoteId === note.id) this.activeNoteFolderId = note.folderId;
+            }
+            this.renderNotes();
+            this.saveData();
+        });
         document.getElementById('notesList').addEventListener('click', (event) => {
             const action = event.target.closest('[data-folder-action]');
             if (action) {
@@ -2108,6 +2167,13 @@ class WinDesk {
         const addFolderRow = (folder) => {
             const row = document.createElement('div');
             row.className = 'note-folder-row' + (this.activeNoteFolderId === folder?.id && !this.activeNoteId ? ' active' : '');
+            if (folder) {
+                row.draggable = true;
+                row.dataset.dragType = 'folder';
+                row.dataset.dragId = folder.id;
+            } else {
+                row.dataset.unfiled = '';
+            }
             const select = document.createElement('button');
             select.type = 'button';
             select.dataset.selectFolder = folder?.id || '';
@@ -2135,6 +2201,9 @@ class WinDesk {
             for (const note of this.notes.filter(item => (item.folderId || null) === folderId)) {
                 const row = document.createElement('div');
                 row.className = 'note-item-row' + (note.id === this.activeNoteId ? ' active' : '');
+                row.draggable = true;
+                row.dataset.dragType = 'note';
+                row.dataset.dragId = note.id;
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.dataset.noteId = note.id;
