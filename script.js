@@ -7,6 +7,11 @@ class WinDesk {
         this.desktopOrder = [];
         this.folders = {};
         this.folderOrder = [];
+        this.notes = [];
+        this.noteFolders = [];
+        this.unfiledNotesCollapsed = false;
+        this.activeNoteFolderId = null;
+        this.activeNoteId = null;
         this.selectedIcons = new Set();
         this.copyClipboard = null;
         this.isSelecting = false;
@@ -30,7 +35,6 @@ class WinDesk {
             this.renderCurrentDesktop();
             console.log('Current desktop rendered');
 
-            this.handleSearch();
             console.log('WinDesk initialization complete');
         } catch (error) {
             console.error('Failed to initialize WinDesk:', error);
@@ -62,6 +66,9 @@ class WinDesk {
                 this.desktopOrder = localData.windesk_data.desktopOrder || Object.keys(this.desktops);
                 this.folders = localData.windesk_data.folders || {};
                 this.folderOrder = localData.windesk_data.folderOrder || [];
+                this.notes = Array.isArray(localData.windesk_data.notes) ? localData.windesk_data.notes : [];
+                this.noteFolders = Array.isArray(localData.windesk_data.noteFolders) ? localData.windesk_data.noteFolders : [];
+                this.unfiledNotesCollapsed = !!localData.windesk_data.unfiledNotesCollapsed;
                 this.topLevelOrder = localData.windesk_data.topLevelOrder || null;
                 this.currentPageByDesktop = localData.windesk_data.currentPageByDesktop || {};
                 dataLoaded = true;
@@ -81,6 +88,9 @@ class WinDesk {
                     this.desktopOrder = syncData.windesk_data.desktopOrder || Object.keys(this.desktops);
                     this.folders = syncData.windesk_data.folders || {};
                     this.folderOrder = syncData.windesk_data.folderOrder || [];
+                    this.notes = Array.isArray(syncData.windesk_data.notes) ? syncData.windesk_data.notes : [];
+                    this.noteFolders = Array.isArray(syncData.windesk_data.noteFolders) ? syncData.windesk_data.noteFolders : [];
+                    this.unfiledNotesCollapsed = !!syncData.windesk_data.unfiledNotesCollapsed;
                     this.topLevelOrder = syncData.windesk_data.topLevelOrder || null;
                     this.currentPageByDesktop = syncData.windesk_data.currentPageByDesktop || {};
                     dataLoaded = true;
@@ -91,6 +101,9 @@ class WinDesk {
                             desktops: this.desktops,
                             currentDesktopId: this.currentDesktopId,
                             desktopOrder: this.desktopOrder,
+                            notes: this.notes,
+                            noteFolders: this.noteFolders,
+                            unfiledNotesCollapsed: this.unfiledNotesCollapsed,
                             lastSaveTime: Date.now()
                         }
                     });
@@ -140,6 +153,7 @@ class WinDesk {
             desktop.pages = desktop.pages.slice(0, 10).map(page => ({ websites: Array.isArray(page.websites) ? page.websites : [] }));
             desktop.websites = desktop.pages[0].websites;
         });
+        this.noteFolders.forEach(folder => { folder.parentId = null; });
         if (!this.currentPageByDesktop) this.currentPageByDesktop = {};
         Object.keys(this.desktops).forEach(id => {
             const maxPage = this.desktops[id].pages.length - 1;
@@ -163,6 +177,9 @@ class WinDesk {
                 desktopOrder: this.desktopOrder,
                 folders: this.folders,
                 folderOrder: this.folderOrder,
+                notes: this.notes,
+                noteFolders: this.noteFolders,
+                unfiledNotesCollapsed: this.unfiledNotesCollapsed,
                 topLevelOrder: this.topLevelOrder || null,
                 currentPageByDesktop: this.currentPageByDesktop || {},
                 lastSaveTime: Date.now()
@@ -191,6 +208,9 @@ class WinDesk {
                     desktopOrder: this.desktopOrder,
                     folders: this.folders,
                     folderOrder: this.folderOrder,
+                    notes: this.notes,
+                    noteFolders: this.noteFolders,
+                    unfiledNotesCollapsed: this.unfiledNotesCollapsed,
                     topLevelOrder: this.topLevelOrder || null,
                     currentPageByDesktop: this.currentPageByDesktop || {},
                     lastSaveTime: Date.now()
@@ -219,6 +239,9 @@ class WinDesk {
                 desktopOrder: this.desktopOrder,
                 folders: this.folders,
                 folderOrder: this.folderOrder,
+                notes: this.notes,
+                noteFolders: this.noteFolders,
+                unfiledNotesCollapsed: this.unfiledNotesCollapsed,
                 topLevelOrder: this.topLevelOrder || null,
                 currentPageByDesktop: this.currentPageByDesktop || {},
                 lastSaveTime: Date.now()
@@ -297,16 +320,7 @@ class WinDesk {
             this.exportData();
         });
 
-        // 搜索功能
-        document.querySelector('.search-input').addEventListener('input', (e) => {
-            this.handleSearch(e.target.value);
-        });
-
-        document.querySelector('.search-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.performSearch(e.target.value);
-            }
-        });
+        this.setupNotesEvents();
     }
 
     setupModalEvents() {
@@ -1965,7 +1979,189 @@ class WinDesk {
         }
     }
 
-    // 搜索功能
+    // OneNote 筆記與資料夾
+    setupNotesEvents() {
+        document.getElementById('oneNoteBtn').addEventListener('click', () => {
+            this.renderNotes();
+            this.showModal('oneNoteModal');
+        });
+        document.getElementById('closeOneNote').addEventListener('click', () => this.hideModal('oneNoteModal'));
+        document.getElementById('oneNoteModal').addEventListener('click', (event) => {
+            if (event.target.id === 'oneNoteModal') this.hideModal('oneNoteModal');
+        });
+        document.getElementById('addNoteBtn').addEventListener('click', () => {
+            if (this.activeNoteFolderId) {
+                const folder = this.noteFolders.find(item => item.id === this.activeNoteFolderId);
+                if (folder) folder.collapsed = false;
+            } else {
+                this.unfiledNotesCollapsed = false;
+            }
+            const note = { id: crypto.randomUUID(), title: '', content: '', folderId: this.activeNoteFolderId, updatedAt: new Date().toISOString() };
+            this.notes.unshift(note);
+            this.activeNoteId = note.id;
+            this.renderNotes();
+            document.getElementById('noteTitle').focus();
+            this.saveData();
+        });
+        document.getElementById('addNoteFolderBtn').addEventListener('click', () => this.addNoteFolder());
+        document.getElementById('notesList').addEventListener('click', (event) => {
+            const action = event.target.closest('[data-folder-action]');
+            if (action) {
+                if (action.dataset.folderAction === 'rename') this.renameNoteFolder(action.dataset.folderId);
+                if (action.dataset.folderAction === 'delete') this.deleteNoteFolder(action.dataset.folderId);
+                return;
+            }
+            const deleteNote = event.target.closest('[data-delete-note-id]');
+            if (deleteNote) {
+                this.deleteNote(deleteNote.dataset.deleteNoteId);
+                return;
+            }
+            const folder = event.target.closest('[data-select-folder]');
+            if (folder) {
+                this.activeNoteFolderId = folder.dataset.selectFolder || null;
+                this.activeNoteId = null;
+                if (this.activeNoteFolderId) {
+                    const selected = this.noteFolders.find(item => item.id === this.activeNoteFolderId);
+                    if (selected) selected.collapsed = !selected.collapsed;
+                } else {
+                    this.unfiledNotesCollapsed = !this.unfiledNotesCollapsed;
+                }
+                this.renderNotes();
+                this.saveData();
+                return;
+            }
+            const button = event.target.closest('[data-note-id]');
+            if (button) {
+                this.activeNoteId = button.dataset.noteId;
+                this.activeNoteFolderId = this.notes.find(note => note.id === this.activeNoteId)?.folderId || null;
+                this.renderNotes();
+            }
+        });
+        for (const [field, key] of [['noteTitle', 'title'], ['noteContent', 'content']]) {
+            document.getElementById(field).addEventListener('input', (event) => {
+                const note = this.notes.find(item => item.id === this.activeNoteId);
+                if (!note) return;
+                note[key] = event.target.value;
+                note.updatedAt = new Date().toISOString();
+                this.renderNoteList();
+                this.saveData();
+            });
+        }
+    }
+
+    deleteNote(id) {
+        if (!this.notes.some(note => note.id === id) || !confirm('確定刪除這則筆記？')) return;
+        this.notes = this.notes.filter(note => note.id !== id);
+        if (this.activeNoteId === id) this.activeNoteId = null;
+        this.renderNotes();
+        this.saveData();
+    }
+
+    addNoteFolder() {
+        const name = prompt('資料夾名稱：');
+        if (!name?.trim()) return;
+        const folder = { id: crypto.randomUUID(), name: name.trim(), collapsed: false };
+        this.noteFolders.push(folder);
+        this.activeNoteFolderId = folder.id;
+        this.activeNoteId = null;
+        this.renderNotes();
+        this.saveData();
+    }
+
+    renameNoteFolder(id) {
+        const folder = this.noteFolders.find(item => item.id === id);
+        if (!folder) return;
+        const name = prompt('新的資料夾名稱：', folder.name);
+        if (!name?.trim()) return;
+        folder.name = name.trim();
+        this.renderNotes();
+        this.saveData();
+    }
+
+    deleteNoteFolder(id) {
+        const folder = this.noteFolders.find(item => item.id === id);
+        if (!folder || !confirm(`確定刪除「${folder.name}」？其中的筆記會移到未分類。`)) return;
+        this.noteFolders = this.noteFolders.filter(item => item.id !== id);
+        this.notes.forEach(note => {
+            if (note.folderId === id) note.folderId = null;
+        });
+        if (this.activeNoteFolderId === id) this.activeNoteFolderId = null;
+        this.unfiledNotesCollapsed = false;
+        this.renderNotes();
+        this.saveData();
+    }
+
+    renderNoteList() {
+        const list = document.getElementById('notesList');
+        list.replaceChildren();
+        const addFolderRow = (folder) => {
+            const row = document.createElement('div');
+            row.className = 'note-folder-row' + (this.activeNoteFolderId === folder?.id && !this.activeNoteId ? ' active' : '');
+            const select = document.createElement('button');
+            select.type = 'button';
+            select.dataset.selectFolder = folder?.id || '';
+            select.className = 'note-folder-name';
+            const collapsed = folder ? !!folder.collapsed : this.unfiledNotesCollapsed;
+            select.textContent = `${collapsed ? '▸' : '▾'} ${folder ? `📁 ${folder.name}` : '未分類'}`;
+            select.setAttribute('aria-expanded', String(!collapsed));
+            row.appendChild(select);
+            if (folder) {
+                for (const [action, label] of [['rename', '更名'], ['delete', '刪除']]) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'note-folder-action';
+                    button.dataset.folderAction = action;
+                    button.dataset.folderId = folder.id;
+                    button.title = `${label}資料夾`;
+                    button.setAttribute('aria-label', `${label}資料夾 ${folder.name}`);
+                    button.textContent = action === 'rename' ? '✎' : '×';
+                    row.appendChild(button);
+                }
+            }
+            list.appendChild(row);
+        };
+        const addNotes = (folderId) => {
+            for (const note of this.notes.filter(item => (item.folderId || null) === folderId)) {
+                const row = document.createElement('div');
+                row.className = 'note-item-row' + (note.id === this.activeNoteId ? ' active' : '');
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.noteId = note.id;
+                button.className = 'note-list-item';
+                button.textContent = note.title.trim() || '未命名筆記';
+                row.appendChild(button);
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'note-folder-action';
+                deleteButton.dataset.deleteNoteId = note.id;
+                deleteButton.title = '刪除筆記';
+                deleteButton.setAttribute('aria-label', `刪除筆記 ${note.title.trim() || '未命名筆記'}`);
+                deleteButton.textContent = '×';
+                row.appendChild(deleteButton);
+                list.appendChild(row);
+            }
+        };
+        addFolderRow(null);
+        if (!this.unfiledNotesCollapsed) addNotes(null);
+        for (const folder of this.noteFolders) {
+            addFolderRow(folder);
+            if (!folder.collapsed) addNotes(folder.id);
+        }
+    }
+
+    renderNotes() {
+        if (!this.notes.some(note => note.id === this.activeNoteId)) {
+            this.activeNoteId = null;
+        }
+        this.renderNoteList();
+        const note = this.notes.find(item => item.id === this.activeNoteId);
+        const title = document.getElementById('noteTitle');
+        const content = document.getElementById('noteContent');
+        title.value = note?.title || '';
+        content.value = note?.content || '';
+        title.disabled = content.disabled = !note;
+    }
+
     handleSearch(query = '') {
         if (!query) return;
 
@@ -1995,6 +2191,9 @@ class WinDesk {
             topLevelOrder: this.topLevelOrder,
             desktopOrder: this.desktopOrder,
             exportDate: new Date().toISOString(),
+            notes: this.notes,
+            noteFolders: this.noteFolders,
+            unfiledNotesCollapsed: this.unfiledNotesCollapsed,
             version: '2.0'
         };
 
@@ -2030,6 +2229,13 @@ class WinDesk {
                         this.folderOrder = data.folderOrder || [];
                         this.topLevelOrder = data.topLevelOrder || [];
                         this.desktopOrder = data.desktopOrder || Object.keys(data.desktops);
+                        this.notes = Array.isArray(data.notes) ? data.notes : [];
+                        this.noteFolders = Array.isArray(data.noteFolders) ? data.noteFolders : [];
+                        this.noteFolders.forEach(folder => { folder.parentId = null; });
+                        this.unfiledNotesCollapsed = !!data.unfiledNotesCollapsed;
+                        this.activeNoteFolderId = null;
+                        this.activeNoteId = null;
+                        this.renderNotes();
 
                         // 確保當前桌面存在
                         if (!this.desktops[this.currentDesktopId]) {

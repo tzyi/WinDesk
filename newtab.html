@@ -11,9 +11,8 @@
     <div class="top-bar">
         <div class="search-container">
             <div class="logo">  🏠 WinDesk</div>
-            <div class="search-box">
-                <input type="text" placeholder="Search..." class="search-input">
-                <button class="search-btn">🔍</button>
+            <div class="tool-buttons">
+                <button type="button" class="tool-btn" id="oneNoteBtn">OneNote</button>
             </div>
         </div>
     </div>
@@ -200,6 +199,28 @@
     </div>
 
     <!-- 隱藏的文件輸入用於匯入 -->
+    <div class="modal" id="oneNoteModal" role="dialog" aria-modal="true" aria-labelledby="oneNoteTitle">
+        <div class="modal-content notes-modal-content">
+            <div class="modal-header">
+                <h3 id="oneNoteTitle">OneNote</h3>
+                <button type="button" class="modal-close" id="closeOneNote" aria-label="關閉">&times;</button>
+            </div>
+            <div class="notes-layout">
+                <aside class="notes-sidebar">
+                    <div class="notes-actions">
+                        <button type="button" class="btn-primary" id="addNoteBtn">＋ 新增筆記</button>
+                        <button type="button" class="btn-secondary" id="addNoteFolderBtn">＋ 資料夾</button>
+                    </div>
+                    <div id="notesList" class="notes-list"></div>
+                </aside>
+                <section class="notes-editor">
+                    <input id="noteTitle" type="text" placeholder="筆記標題" aria-label="筆記標題">
+                    <textarea id="noteContent" placeholder="開始輸入筆記..." aria-label="筆記內容"></textarea>
+                </section>
+            </div>
+        </div>
+    </div>
+
     <input type="file" id="importFile" accept=".json" style="display: none;">
 
     <script src="script.js"></script>
