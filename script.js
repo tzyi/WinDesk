@@ -8,6 +8,7 @@ class WinDesk {
         this.folders = {};
         this.folderOrder = [];
         this.selectedIcons = new Set();
+        this.copyClipboard = null;
         this.isSelecting = false;
         this.selectionStart = null;
         this.isBatchDragging = false;
@@ -426,6 +427,17 @@ class WinDesk {
             if (e.key === 'Escape') {
                 this.clearSelection();
             }
+            if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+            const key = e.key.toLowerCase();
+            if (key === 'c' && this.selectedIcons.size > 0) {
+                e.preventDefault();
+                this.copySelectedIcons();
+            } else if (key === 'v' && this.copyClipboard?.items?.length) {
+                const target = e.target;
+                if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+                e.preventDefault();
+                this.pasteCopiedIcons();
+            }
         });
 
         // 頁面關閉前確保資料保存
@@ -552,6 +564,71 @@ class WinDesk {
         const selectionBox = document.getElementById('selectionBox');
         selectionBox.style.display = 'none';
         this.isBatchDragging = false;
+    }
+
+    copySelectedIcons() {
+        const sourceDesktopId = this.currentDesktopId;
+        const sourcePageIndex = this.getCurrentPageIndex();
+        const sourceWebsites = this.getCurrentWebsites();
+        const items = sourceWebsites
+            .filter(website => this.selectedIcons.has(website.id))
+            .map(website => ({ ...website, gridPosition: website.gridPosition || 0 }));
+        if (!items.length) return;
+
+        const minRow = Math.min(...items.map(item => Math.floor(item.gridPosition / 20)));
+        const minCol = Math.min(...items.map(item => item.gridPosition % 20));
+        this.copyClipboard = {
+            items: items.map(item => ({
+                ...item,
+                rowOffset: Math.floor(item.gridPosition / 20) - minRow,
+                colOffset: (item.gridPosition % 20) - minCol
+            }))
+        };
+    }
+
+    pasteCopiedIcons() {
+        const clipboard = this.copyClipboard;
+        if (!clipboard?.items?.length) return;
+
+        const targetWebsites = this.getCurrentWebsites();
+        const pasteItems = clipboard.items;
+
+        const usedPositions = new Set(targetWebsites.map(website => website.gridPosition || 0));
+        const maxRowOffset = Math.max(...pasteItems.map(item => item.rowOffset));
+        const maxColOffset = Math.max(...pasteItems.map(item => item.colOffset));
+        let basePosition = -1;
+
+        for (let base = 0; base < 180; base++) {
+            const baseRow = Math.floor(base / 20);
+            const baseCol = base % 20;
+            if (baseRow + maxRowOffset >= 9 || baseCol + maxColOffset >= 20) continue;
+            const fits = pasteItems.every(item =>
+                !usedPositions.has((baseRow + item.rowOffset) * 20 + baseCol + item.colOffset)
+            );
+            if (fits) {
+                basePosition = base;
+                break;
+            }
+        }
+
+        if (basePosition === -1) {
+            alert('目前頁面沒有足夠的空間可以貼上這些圖示。');
+            return;
+        }
+
+        const baseRow = Math.floor(basePosition / 20);
+        const baseCol = basePosition % 20;
+        pasteItems.forEach((item, index) => {
+            targetWebsites.push({
+                name: item.name,
+                url: item.url,
+                icon: item.icon,
+                id: `website_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                gridPosition: (baseRow + item.rowOffset) * 20 + baseCol + item.colOffset
+            });
+        });
+        this.saveData();
+        this.renderCurrentDesktop();
     }
 
     setupBatchDrag() {
@@ -1534,9 +1611,12 @@ class WinDesk {
         this.renderCurrentDesktop();
     }
 
-    findAvailablePositions(count, startIndex) {
+    findAvailablePositions(count, startIndex, excludedWebsiteIds = []) {
         const currentDesktop = this.desktops[this.currentDesktopId];
-        const usedPositions = new Set(this.getCurrentWebsites().map(w => w.gridPosition || 0));
+        const excludedIds = new Set(excludedWebsiteIds);
+        const usedPositions = new Set(this.getCurrentWebsites()
+            .filter(website => !excludedIds.has(website.id))
+            .map(w => w.gridPosition || 0));
         const positions = [];
 
         // 嘗試從起始位置開始找連續位置
