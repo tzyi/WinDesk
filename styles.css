@@ -403,7 +403,9 @@ body {
     flex: 1;
     position: relative;
     background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80') center/cover;
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .desktop-content {
@@ -412,10 +414,32 @@ body {
     grid-template-columns: repeat(20, 1fr);
     grid-template-rows: repeat(9, 1fr);
     gap: 8px;
-    min-height: calc(100vh - 80px);
-    max-height: calc(100vh - 80px);
+    flex: 1;
+    min-height: 0;
     box-sizing: border-box;
 }
+
+.page-tabs {
+    order: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    min-height: 54px;
+    padding: 7px 14px max(7px, env(safe-area-inset-bottom));
+    background: rgba(10, 12, 24, 0.68);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(12px);
+}
+.page-tab { width: 32px; height: 32px; border: 1px solid rgba(255,255,255,.32); border-radius: 50%; color: white; background: rgba(255,255,255,.14); cursor: pointer; font-size: 13px; transition: background .2s, transform .2s; }
+.page-tab:hover { background: rgba(255,255,255,.3); transform: translateY(-1px); }
+.page-tab.active { background: #667eea; border-color: #a5b4fc; box-shadow: 0 0 0 3px rgba(102,126,234,.25); }
+.page-tab-add { border-style: dashed; font-size: 20px; line-height: 1; }
+.page-tab-add:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+.page-tab-delete { color: #ffd5d5; border-color: rgba(255,120,120,.5); background: rgba(160,35,45,.4); font-size: 20px; line-height: 1; }
+.page-tab-delete:hover { background: rgba(205,55,65,.72); }
+.page-tab-delete:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+.page-tab-count { color: rgba(255,255,255,.72); font-size: 12px; margin-left: 4px; }
 
 /* 網格單元格 */
 .grid-cell {
@@ -718,7 +742,7 @@ body {
     
     .desktop-content {
         grid-template-columns: repeat(12, 1fr);
-        grid-template-rows: repeat(7, 1fr);
+        grid-template-rows: repeat(7, minmax(45px, 1fr));
         gap: 6px;
         padding: 10px;
     }
@@ -741,6 +765,13 @@ body {
     .modal-content {
         min-width: 300px;
         margin: 20px;
+    }
+}
+
+@media (max-width: 1100px) {
+    .desktop-content {
+        grid-template-columns: repeat(10, minmax(0, 1fr));
+        grid-template-rows: repeat(8, minmax(48px, 1fr));
     }
 }
 
