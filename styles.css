@@ -492,7 +492,7 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 4px;
+    padding: 2px;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
@@ -525,8 +525,8 @@ body {
 }
 
 .website-icon img {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     border-radius: 4px;
     margin-bottom: 2px;
     object-fit: cover;
@@ -777,14 +777,14 @@ body {
     }
     
     .website-icon {
-        padding: 3px;
+        padding: 2px;
         min-height: 45px;
         max-height: 60px;
     }
     
     .website-icon img {
-        width: 20px;
-        height: 20px;
+        width: 26px;
+        height: 26px;
     }
     
     .website-icon .name {
